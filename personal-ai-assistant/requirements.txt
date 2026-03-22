@@ -1,4 +1,8 @@
-speechrecognition
-pyaudio
-pyttsx3
 google-generativeai
+pyttsx3
+numpy
+sounddevice
+faster-whisper
+SpeechRecognition
+PyAudio
+vosk
