@@ -110,6 +110,50 @@ def generate_response(prompt: str) -> str:
     return "I could not generate a proper response."
 
 
+def refine_spoken_command(transcript: str) -> str:
+    cleaned_transcript = transcript.strip()
+    if not cleaned_transcript:
+        return ""
+
+    model, model_error = _get_model()
+    if model is None:
+        if model_error:
+            print("Gemini speech cleanup skipped:", model_error)
+        return cleaned_transcript
+
+    cleanup_prompt = f"""You clean noisy speech-to-text transcripts for a personal assistant.
+
+Rules:
+- Return only the corrected user command on a single line.
+- Preserve the user's original meaning.
+- Fix likely speech-recognition mistakes.
+- Support mixed Hindi and English written in Latin script.
+- Do not answer the command.
+- If the transcript is already clear, return it with minimal cleanup.
+
+Examples:
+- works my name -> what is my name
+- open goo gal -> open google
+- mera naam satyam hai -> my name is Satyam
+
+Transcript:
+{cleaned_transcript}
+
+Corrected command:"""
+
+    try:
+        response = model.generate_content(cleanup_prompt)
+    except Exception as error:
+        print("Gemini speech cleanup error:", error)
+        return cleaned_transcript
+
+    if response and hasattr(response, "text") and response.text:
+        refined_text = response.text.strip().splitlines()[0].strip().strip('"').strip("'")
+        return refined_text or cleaned_transcript
+
+    return cleaned_transcript
+
+
 def generate_code(prompt: str, language: str = "python"):
     cleaned_prompt = prompt.strip()
     if not cleaned_prompt:

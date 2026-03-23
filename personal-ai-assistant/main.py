@@ -10,7 +10,6 @@ def respond(voice_engine, text):
     if not text:
         return
 
-    print(f"Assistant: {text}")
     try:
         voice_engine.speak(text)
     except Exception as error:
@@ -18,22 +17,7 @@ def respond(voice_engine, text):
 
 
 def get_input(voice_engine):
-    print(voice_engine.get_input_prompt())
-    if voice_engine.has_voice_input():
-        command = voice_engine.listen_continuous(announce=False)
-        if command:
-            return command
-
-    print("Type your command:")
-    try:
-        typed_command = input().strip()
-    except EOFError:
-        return None
-
-    if not typed_command:
-        return None
-
-    return voice_engine.accept_typed_command(typed_command)
+    return voice_engine.listen()
 
 
 def main():
@@ -50,7 +34,6 @@ def main():
     fail_count = 0
 
     respond(voice_engine, "Assistant is ready. Say a command.")
-
     try:
         while True:
             command = get_input(voice_engine)

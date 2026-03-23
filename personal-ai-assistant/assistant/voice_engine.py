@@ -22,6 +22,7 @@ try:
 except ImportError:
     sr = None
 
+from assistant.gemini_brain import refine_spoken_command
 from assistant.memory_manager import MemoryManager
 
 
@@ -34,6 +35,7 @@ class VoiceEngine:
         self.system_name = platform.system()
         self.system_tts_command = self._detect_system_tts_command()
         self.prefer_system_tts = self.system_tts_command is not None
+        self.system_tts_voice_candidates = ["Lekha", "Samantha", None]
         self.preferred_voice_id = "com.apple.voice.compact.hi-IN.Lekha"
         self.engine = None
         self.tts_warning_announced = False
@@ -60,6 +62,7 @@ class VoiceEngine:
         self.whisper_warmup_in_progress = False
         self.whisper_warmup_thread = None
         self.voice_backend = "text"
+        self.active_voice_backend = None
         self.voice_status_announced = False
 
         self.last_spoken_text = ""
@@ -75,7 +78,7 @@ class VoiceEngine:
         self.energy_threshold = 0.015
         self.ambient_noise_duration = 0.5
         self.pre_speech_buffer_duration = 0.5
-        self.speech_start_timeout = 8.0
+        self.speech_start_timeout = 20.0
         self.ambient_multiplier = 1.8
         self.max_speech_threshold = 0.04
         self.max_record_seconds = 45
@@ -84,11 +87,13 @@ class VoiceEngine:
         self.interrupt_chunk_duration = 0.1
         self.interrupt_energy_threshold = 0.04
         self.interrupt_activation_chunks = 2
-        self.audio_stream_latency = "low"
+        self.audio_stream_latency = "high"
         self.audio_overflow_warning_interval = 5.0
         self.last_audio_overflow_warning_at = 0.0
+        self.last_mic_status_warning_at = 0.0
+        self.mic_status_warning_interval = 5.0
         self.vosk_blocksize = 8000
-        self.q = queue.Queue(maxsize=64)
+        self.q = queue.Queue(maxsize=256)
 
         self.reset_microphone()
         self._refresh_voice_backend()
@@ -98,41 +103,26 @@ class VoiceEngine:
             return
 
         normalized_text = self._normalize_text(text)
+        print(f"Assistant: {text}")
         self.is_speaking = True
-        print("DEBUG: Speaking started")
-
-        if self.prefer_system_tts:
-            try:
-                self._speak_with_fallback(text)
-            finally:
-                self.is_speaking = False
-                self.last_spoken_text = normalized_text
-                self.last_speech_finished_at = time.monotonic()
-                time.sleep(0.2)
-            return
 
         try:
-            if self.engine is None:
-                self.reset_engine()
+            spoke = False
 
-            if self.engine is None:
-                self._speak_with_fallback(text)
-                return
+            if not self.prefer_system_tts:
+                spoke = self._speak_with_engine(text)
 
-            self.engine.stop()
-            self._speak_with_interrupt_checks(text)
+            if not spoke:
+                spoke = self._speak_with_system_tts(text)
+
+            if not spoke:
+                spoke = self._speak_with_engine(text, force_reset=True)
+
+            if not spoke and not self.tts_warning_announced:
+                print("TTS warning: no voice engine is available. Responses will be printed only.")
+                self.tts_warning_announced = True
         except Exception as error:
             print(f"TTS error: {error}")
-            self.reset_engine()
-            try:
-                if self.engine is not None:
-                    self.engine.stop()
-                    self._speak_with_interrupt_checks(text)
-                else:
-                    self._speak_with_fallback(text)
-            except Exception as retry_error:
-                print(f"TTS retry error: {retry_error}")
-                self._speak_with_fallback(text)
         finally:
             self.is_speaking = False
             self.last_spoken_text = normalized_text
@@ -207,6 +197,21 @@ class VoiceEngine:
                 self.engine.stop()
                 break
 
+    def _speak_with_engine(self, text, force_reset=False):
+        if pyttsx3 is None:
+            return False
+
+        if force_reset or self.engine is None:
+            self.reset_engine()
+
+        if self.engine is None:
+            return False
+
+        self.engine.stop()
+        self.engine.say(text)
+        self.engine.runAndWait()
+        return True
+
     def _speak_with_fallback(self, text):
         if self._speak_with_system_tts(text):
             return
@@ -219,34 +224,53 @@ class VoiceEngine:
         if not self.system_tts_command:
             return False
 
+        parts = self._split_speech_chunks(text)
+        if not parts:
+            parts = [text]
+
+        last_error = None
         try:
-            parts = self._split_speech_chunks(text)
-            if not parts:
-                parts = [text]
+            for command_prefix in self._system_tts_command_candidates():
+                command_failed = False
 
-            for index, chunk in enumerate(parts):
-                if not chunk.strip():
-                    continue
+                for index, chunk in enumerate(parts):
+                    if not chunk.strip():
+                        continue
 
-                subprocess.run(
-                    self.system_tts_command + [chunk],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
+                    result = subprocess.run(
+                        command_prefix + [chunk],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    if result.returncode != 0:
+                        last_error = (result.stderr or "").strip() or f"exit code {result.returncode}"
+                        command_failed = True
+                        break
 
-                if index == len(parts) - 1:
-                    continue
-
-                interrupt_command = self._capture_interrupt_command(chunk)
-                if interrupt_command:
-                    self.pending_command = interrupt_command
-                    break
-
-            return True
+                if not command_failed:
+                    return True
         except OSError as error:
-            print(f"System TTS error: {error}")
+            last_error = str(error)
+
+        if last_error:
+            print(f"System TTS error: {last_error}")
             return False
+
+        return False
+
+    def _system_tts_command_candidates(self):
+        if self.system_name != "Darwin" or not self.system_tts_command:
+            return [self.system_tts_command]
+
+        candidates = []
+        for voice_name in self.system_tts_voice_candidates:
+            if voice_name:
+                candidates.append(["say", "-v", voice_name])
+            else:
+                candidates.append(["say"])
+        return candidates
 
     def stop(self):
         try:
@@ -258,12 +282,6 @@ class VoiceEngine:
         self.last_speech_finished_at = time.monotonic()
 
     def listen(self):
-        return self.listen_continuous()
-
-    def listen_continuous(self, announce=True, stop_event=None):
-        return self.listen_for_input(announce=announce, stop_event=stop_event)
-
-    def listen_for_input(self, announce=True, stop_event=None):
         self.last_listen_error = False
 
         if self.pending_command:
@@ -272,51 +290,56 @@ class VoiceEngine:
             print(f"You: {command}")
             return command
 
-        if self.is_speaking or self._is_stop_requested(stop_event):
+        if self.is_speaking:
             return None
 
         self._wait_for_listen_window()
         self._refresh_voice_backend()
 
-        if self.voice_backend == "whisper" and self.whisper_model is not None:
-            return self._listen_with_whisper(announce=announce, stop_event=stop_event)
+        if self.recognizer is not None and self.microphone is not None:
+            return self._listen_with_speech_recognition(announce=True)
 
         if self.voice_backend == "vosk":
-            return self._listen_with_vosk(announce=announce, stop_event=stop_event)
+            return self._listen_with_vosk(announce=True, stop_event=None)
 
-        if self.voice_backend == "speech_recognition" and stop_event is None:
-            return self._listen_with_speech_recognition(announce=announce)
+        if self.voice_backend == "whisper" and self.whisper_model is not None:
+            return self._listen_with_whisper(announce=True, stop_event=None)
 
-        if announce:
-            self._announce_voice_status_once()
-        if stop_event is not None:
-            time.sleep(0.1)
+        self._announce_voice_status_once()
         return None
 
+    def listen_continuous(self, announce=True, stop_event=None):
+        return self.listen()
+
+    def listen_for_input(self, announce=True, stop_event=None):
+        return self.listen()
+
     def _listen_with_speech_recognition(self, announce=True):
+        if sr is None or self.recognizer is None or self.microphone is None:
+            return None
+
         try:
             with self.microphone as source:
                 if announce:
                     print("Listening...")
-                self.recognizer.pause_threshold = self.pause_threshold
-                self.recognizer.energy_threshold = 300
-                self.recognizer.dynamic_energy_threshold = True
+                self.recognizer.pause_threshold = 1.0
                 self.recognizer.adjust_for_ambient_noise(source, duration=0.3)
                 audio = self.recognizer.listen(
                     source,
-                    timeout=4,
-                    phrase_time_limit=None,
+                    timeout=5,
+                    phrase_time_limit=8,
                 )
 
             command = self.recognizer.recognize_google(audio)
-            command = self._normalize_text(command)
-            command = self.memory_manager.correct_command_with_stored_name(command)
+            command = self._prepare_spoken_command(command, backend="speech_recognition")
             if not command:
                 return None
 
-            print(f"You (voice): {command}")
-            self._maybe_start_whisper_warmup()
+            self.active_voice_backend = "speech_recognition"
+            print(f"You: {command}")
             return command.lower()
+        except sr.WaitTimeoutError:
+            return None
         except Exception as error:
             print(f"Listening error: {error}")
             self.last_listen_error = True
@@ -368,7 +391,11 @@ class VoiceEngine:
                         audio_bytes = self.q.get(timeout=0.1)
                     except queue.Empty:
                         time.sleep(0.01)
-                        if time.monotonic() - listen_started_at >= self.speech_start_timeout and not heard_speech:
+                        if (
+                            self.speech_start_timeout is not None
+                            and time.monotonic() - listen_started_at >= self.speech_start_timeout
+                            and not heard_speech
+                        ):
                             return None
                         continue
 
@@ -395,7 +422,10 @@ class VoiceEngine:
                                 silence_started_at = time.monotonic()
                             elif time.monotonic() - silence_started_at >= self.pause_threshold:
                                 break
-                        elif time.monotonic() - listen_started_at >= self.speech_start_timeout:
+                        elif (
+                            self.speech_start_timeout is not None
+                            and time.monotonic() - listen_started_at >= self.speech_start_timeout
+                        ):
                             return None
 
                     time.sleep(0.01)
@@ -407,22 +437,26 @@ class VoiceEngine:
 
         final_result = json.loads(recognizer.FinalResult()).get("text", "").strip()
         command = final_result or final_text or last_partial
-        command = self._normalize_text(command)
-        command = self.memory_manager.correct_command_with_stored_name(command)
+        command = self._prepare_spoken_command(command, backend="vosk")
         if not command:
             return None
 
+        self.active_voice_backend = "vosk"
         print(f"You: {command}")
-        self._maybe_start_whisper_warmup()
         return command.lower()
 
     def callback(self, indata, frames, time_info, status):
         if status:
-            print("Mic status:", status)
-            return
+            self._report_mic_status(status)
 
         try:
             self.q.put(bytes(indata), block=False)
+        except queue.Full:
+            try:
+                self.q.get_nowait()
+                self.q.put(bytes(indata), block=False)
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -506,8 +540,7 @@ class VoiceEngine:
 
         transcript_parts = [segment.text.strip() for segment in segments if segment.text.strip()]
         command = " ".join(transcript_parts)
-        command = self._normalize_text(command)
-        command = self.memory_manager.correct_command_with_stored_name(command)
+        command = self._prepare_spoken_command(command, backend="whisper")
 
         if not command:
             return None
@@ -515,6 +548,7 @@ class VoiceEngine:
         if listen_started_at is not None and self._should_ignore_echo(command, listen_started_at):
             return None
 
+        self.active_voice_backend = "whisper"
         if print_user:
             print(f"You: {command}")
 
@@ -588,7 +622,7 @@ class VoiceEngine:
                         recorded_chunks.extend(list(pre_speech_chunks))
                         silence_duration = 0.0
                         waiting_for_speech = 0.0
-                    elif waiting_for_speech >= self.speech_start_timeout:
+                    elif self.speech_start_timeout is not None and waiting_for_speech >= self.speech_start_timeout:
                         return self.np.array([])
                     continue
 
@@ -652,6 +686,20 @@ class VoiceEngine:
     def _normalize_text(self, text):
         cleaned_text = re.sub(r"[^a-zA-Z0-9\s]", " ", text.lower())
         return " ".join(cleaned_text.split())
+
+    def _prepare_spoken_command(self, command, backend):
+        normalized_command = self._normalize_text(command)
+        if not normalized_command:
+            return None
+
+        refined_command = normalized_command
+        if backend in {"vosk", "speech_recognition"} and len(normalized_command.split()) >= 2:
+            refined_command = self._normalize_text(refine_spoken_command(normalized_command))
+            if not refined_command:
+                refined_command = normalized_command
+
+        refined_command = self.memory_manager.correct_command_with_stored_name(refined_command)
+        return refined_command or normalized_command
 
     def _ensure_whisper_model(self):
         if self.whisper_model is not None:
@@ -747,6 +795,7 @@ class VoiceEngine:
         self.recognizer = None
         self.microphone = None
         self.pending_command = None
+        self.active_voice_backend = None
 
         if sr is None:
             return
@@ -791,7 +840,6 @@ class VoiceEngine:
             return None
 
         print(f"You: {cleaned_command}")
-        self._maybe_start_whisper_warmup()
         return cleaned_command
 
     def get_input_prompt(self):
@@ -807,16 +855,29 @@ class VoiceEngine:
         return self.voice_backend in {"vosk", "whisper", "speech_recognition"}
 
     def _refresh_voice_backend(self):
+        locked_backend = self.active_voice_backend
+        if locked_backend == "speech_recognition" and self.recognizer is not None and self.microphone is not None:
+            self.voice_backend = "speech_recognition"
+            return
+
+        if locked_backend == "vosk" and self._can_use_vosk_backend():
+            self.voice_backend = "vosk"
+            return
+
+        if locked_backend == "whisper" and self.enable_whisper and self.whisper_model is not None:
+            self.voice_backend = "whisper"
+            return
+
         if self.recognizer is not None and self.microphone is not None:
             self.voice_backend = "speech_recognition"
             return
 
-        if self.enable_whisper and self.whisper_model is not None:
-            self.voice_backend = "whisper"
-            return
-
         if self._can_use_vosk_backend():
             self.voice_backend = "vosk"
+            return
+
+        if self.enable_whisper and self.whisper_model is not None:
+            self.voice_backend = "whisper"
             return
 
         if self.enable_whisper and self.whisper_warmup_in_progress:
@@ -872,6 +933,9 @@ class VoiceEngine:
 
         self._start_whisper_warmup()
 
+    def warmup_voice_model(self):
+        self._maybe_start_whisper_warmup()
+
     def _warmup_whisper_model(self):
         try:
             if not self._ensure_whisper_dependencies():
@@ -907,6 +971,14 @@ class VoiceEngine:
 
         print("Microphone warning: audio input overflow detected.")
         self.last_audio_overflow_warning_at = now
+
+    def _report_mic_status(self, status):
+        now = time.monotonic()
+        if now - self.last_mic_status_warning_at < self.mic_status_warning_interval:
+            return
+
+        print(f"Microphone status: {status}")
+        self.last_mic_status_warning_at = now
 
     def _reset_vosk_queue(self):
         while True:
