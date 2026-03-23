@@ -4,3 +4,6 @@ __pycache__/
 .DS_Store
 models/
 *.zip
+.env
+generated_projects/
+node_modules/
