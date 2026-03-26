@@ -3,3 +3,4 @@ pyttsx3
 SpeechRecognition
 PyAudio
 python-dotenv
+flask

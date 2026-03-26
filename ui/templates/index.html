@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Top left: Chat interaction -->
+        <div class="chat-container glass-panel">
+            <div class="chat-header">Conversations</div>
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages go here -->
+            </div>
+            <div class="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type a command..." autocomplete="off">
+                <button id="send-btn">Send</button>
+            </div>
+        </div>
+
+        <!-- Center: Orb Animation -->
+        <div class="orb-container">
+            <div class="orb idle" id="assistant-orb">
+                <div class="glow"></div>
+                <!-- Waveforms for speaking animation -->
+                <div class="waveforms">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right/Bottom: Terminal -->
+        <div class="terminal-container glass-panel">
+            <div class="terminal-header">
+                <div class="dots">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                </div>
+                <span>System Logs</span>
+            </div>
+            <div class="terminal-output" id="terminal-output">
+                <!-- Logs will be streamed here -->
+            </div>
+        </div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>

@@ -1,0 +1,282 @@
+:root {
+    --bg-dark: #0a0a0f;
+    --neon-blue: #00f3ff;
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #e0e0e0;
+    --text-secondary: #aaaaaa;
+    --term-bg: rgba(0, 0, 0, 0.6);
+    --term-text: #00ff00;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+    background: radial-gradient(circle at center, #11111a 0%, #050508 100%);
+}
+
+.container {
+    width: 95vw;
+    height: 90vh;
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    grid-template-rows: 1fr 250px;
+    gap: 20px;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Chat Section */
+.chat-container {
+    grid-column: 1 / 2;
+    grid-row: 1 / 3;
+}
+
+.chat-header {
+    padding: 15px 20px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--glass-border);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: 0.9em;
+    color: var(--neon-blue);
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+.chat-messages::-webkit-scrollbar-thumb {
+    background: var(--glass-border);
+    border-radius: 10px;
+}
+
+.message {
+    padding: 10px 15px;
+    border-radius: 12px;
+    max-width: 85%;
+    line-height: 1.4;
+    font-size: 0.95em;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+    align-self: flex-end;
+    background: rgba(0, 243, 255, 0.15);
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    border-bottom-right-radius: 2px;
+}
+
+.message.assistant {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-bottom-left-radius: 2px;
+}
+
+.chat-input-container {
+    padding: 15px;
+    border-top: 1px solid var(--glass-border);
+    display: flex;
+    gap: 10px;
+}
+
+#chat-input {
+    flex: 1;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 10px 15px;
+    color: white;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#chat-input:focus {
+    border-color: var(--neon-blue);
+}
+
+#send-btn {
+    background: transparent;
+    border: 1px solid var(--neon-blue);
+    color: var(--neon-blue);
+    padding: 0 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+#send-btn:hover {
+    background: var(--neon-blue);
+    color: black;
+    box-shadow: 0 0 10px var(--neon-blue);
+}
+
+/* Orb Section */
+.orb-container {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.orb {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(0, 243, 255, 0.8), rgba(0, 50, 150, 0.4));
+    box-shadow: 0 0 40px rgba(0, 243, 255, 0.4), inset 0 0 20px rgba(255,255,255,0.5);
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.orb.idle {
+    animation: breathe 4s infinite ease-in-out;
+}
+
+@keyframes breathe {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(0, 243, 255, 0.4); }
+    50% { transform: scale(1.05); box-shadow: 0 0 60px rgba(0, 243, 255, 0.6); }
+}
+
+.orb.speaking {
+    animation: pulse 1s infinite alternate;
+    box-shadow: 0 0 80px rgba(0, 243, 255, 0.8);
+    transform: scale(1.1);
+}
+
+@keyframes pulse {
+    from { box-shadow: 0 0 60px rgba(0, 243, 255, 0.6); }
+    to { box-shadow: 0 0 100px rgba(0, 243, 255, 1); }
+}
+
+.waveforms {
+    display: none;
+    gap: 4px;
+    height: 40px;
+    align-items: center;
+}
+
+.orb.speaking .waveforms {
+    display: flex;
+}
+
+.bar {
+    width: 6px;
+    background: white;
+    border-radius: 3px;
+    animation: wave 0.5s infinite ease-in-out alternate;
+}
+
+.bar:nth-child(1) { height: 10px; animation-delay: 0.1s; }
+.bar:nth-child(2) { height: 20px; animation-delay: 0.2s; }
+.bar:nth-child(3) { height: 30px; animation-delay: 0.3s; }
+.bar:nth-child(4) { height: 40px; animation-delay: 0.4s; }
+.bar:nth-child(5) { height: 30px; animation-delay: 0.5s; }
+.bar:nth-child(6) { height: 20px; animation-delay: 0.6s; }
+.bar:nth-child(7) { height: 10px; animation-delay: 0.7s; }
+
+@keyframes wave {
+    from { transform: scaleY(0.5); }
+    to { transform: scaleY(1.5); }
+}
+
+/* Terminal Section */
+.terminal-container {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+    background: var(--term-bg);
+    font-family: 'Fira Code', monospace;
+}
+
+.terminal-header {
+    background: rgba(0,0,0,0.4);
+    padding: 8px 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.dots {
+    display: flex;
+    gap: 6px;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+.dot.red { background: #ff5f56; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green { background: #27c93f; }
+
+.terminal-output {
+    padding: 15px;
+    height: 100%;
+    overflow-y: auto;
+    color: var(--term-text);
+    font-size: 0.9em;
+    line-height: 1.5;
+    letter-spacing: 0.5px;
+}
+
+.terminal-output p {
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+.terminal-output::-webkit-scrollbar {
+    width: 6px;
+}
+.terminal-output::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 0, 0.3);
+    border-radius: 10px;
+}

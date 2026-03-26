@@ -551,7 +551,7 @@ def delete_item(item_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=3425)
 ''',
             "frontend/index.html": f'''<!DOCTYPE html>
 <html lang="en">
@@ -696,7 +696,7 @@ button {
   border-radius: 14px;
 }
 """,
-            "frontend/app.js": """const apiBase = "http://127.0.0.1:5000/api";
+            "frontend/app.js": """const apiBase = "http://127.0.0.1:3425/api";
 let currentUser = null;
 
 const statusEl = document.getElementById("status");
