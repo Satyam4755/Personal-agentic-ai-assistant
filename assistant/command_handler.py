@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 
 from assistant.agent_manager import AgentManager
+from assistant.code_executor import CodeExecutor
 from assistant.gemini_brain import detect_intent, generate_assistant_response
 from assistant.system_control import SystemControl
 
@@ -10,6 +11,7 @@ class CommandHandler:
     def __init__(self, agent_manager=None):
         self.agent_manager = agent_manager or AgentManager()
         self.system_control = SystemControl()
+        self.code_executor = CodeExecutor(system_control=self.system_control)
 
     def handle_command(self, command):
         normalized_command = self.normalize(command)
@@ -23,8 +25,9 @@ class CommandHandler:
         if system_response:
             return system_response, False
 
-        if self.agent_manager.is_project_request(command):
-            return self.agent_manager.handle_project_request(command), False
+        if self.code_executor.is_code_request(command):
+            result = self.code_executor.execute_code_request(command)
+            return result["message"], False
 
         datetime_response = self.handle_datetime_command(normalized_command)
         if datetime_response:
@@ -37,7 +40,8 @@ class CommandHandler:
                 return system_response, False
 
         if gemini_intent["intent"] == "project_generation":
-            return self.agent_manager.handle_project_request(command), False
+            result = self.code_executor.execute_code_request(command)
+            return result["message"], False
 
         context_prompt = self.agent_manager.get_context_prompt(command)
         gemini_response = generate_assistant_response(command, context_prompt=context_prompt)

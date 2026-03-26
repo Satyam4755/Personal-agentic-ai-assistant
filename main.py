@@ -37,10 +37,31 @@ def main():
     voice_engine.speak("Assistant is ready. Say a command.")
 
     try:
+        exit_commands = ["bye", "bye bye", "exit", "stop", "quit"]
+
         while True:
             command = voice_engine.listen()
             if not command:
                 continue
+
+            text_lower = command.lower().strip()
+
+            # Custom small talk responses
+            if "hello" in text_lower:
+                response = "Hello sir, kaise hai aap"
+                voice_engine.speak(response)
+                continue
+
+            if "tum kaise ho" in text_lower or "kaise ho" in text_lower:
+                response = "Mai bhi badhiya hu sir, bataiye mai kaise apki madad karu"
+                voice_engine.speak(response)
+                continue
+
+            # Handle exit commands directly
+            if any(cmd in text_lower for cmd in exit_commands):
+                response = "Goodbye Sir! 👋"
+                voice_engine.speak(response)
+                break
 
             agent_manager.remember_context(command)
             response, should_exit = command_handler.handle_command(command)

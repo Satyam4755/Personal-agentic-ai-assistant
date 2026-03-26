@@ -68,18 +68,28 @@ class SystemControl:
 
         return "Calculator application was not found on this computer."
 
-    def open_vs_code(self):
+    def open_vs_code(self, path=None):
+        target_path = str(path) if path else None
+
         if self.system_name == "Darwin":
             if self._command_exists("code"):
-                subprocess.Popen(["code"])
+                command = ["code"]
+                if target_path:
+                    command.append(target_path)
+                subprocess.Popen(command)
                 return "Opening Visual Studio Code."
 
-            subprocess.Popen(["open", "-a", "Visual Studio Code"])
+            command = ["open", "-a", "Visual Studio Code"]
+            if target_path:
+                command.append(target_path)
+            subprocess.Popen(command)
             return "Opening Visual Studio Code."
 
         if self.system_name == "Windows":
             for command in (["code"], ["Code.exe"]):
                 if self._command_exists(command[0]):
+                    if target_path:
+                        command.append(target_path)
                     subprocess.Popen(command)
                     return "Opening Visual Studio Code."
 
@@ -87,6 +97,8 @@ class SystemControl:
 
         for command in (["code"], ["codium"]):
             if self._command_exists(command[0]):
+                if target_path:
+                    command.append(target_path)
                 subprocess.Popen(command)
                 return "Opening Visual Studio Code."
 

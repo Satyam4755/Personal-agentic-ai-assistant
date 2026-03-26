@@ -10,10 +10,12 @@ Pure Python terminal-based personal assistant with microphone input, Gemini inte
 │   ├── __init__.py
 │   ├── agent_manager.py
 │   ├── command_handler.py
+│   ├── code_executor.py
 │   ├── gemini_brain.py
 │   ├── system_control.py
 │   └── voice_engine.py
 ├── main.py
+├── projects/
 ├── requirements.txt
 └── .env
 ```
@@ -24,7 +26,9 @@ Pure Python terminal-based personal assistant with microphone input, Gemini inte
 - Microphone input with typed fallback if audio input is unavailable
 - Gemini responses for English, Hindi, and Hinglish
 - Mac commands like `open youtube`, `open google`, `open vscode`, and `open calculator`
-- Full-stack app generation for prompts like `build full stack app`
+- Code execution workflow for prompts like `write python calculator` and `build full stack app`
+- Automatic folder creation under `projects/` with safe timestamp suffixes for duplicates
+- Automatic VS Code opening after files are written
 
 ## Setup
 
@@ -55,4 +59,4 @@ python main.py
 - On macOS, text-to-speech uses `say` when available.
 - Speech recognition uses the microphone through `SpeechRecognition`.
 - If microphone setup fails, the assistant falls back to typed terminal input.
-- Generated projects are written under `generated_projects/`.
+- Generated projects are written under `projects/`.

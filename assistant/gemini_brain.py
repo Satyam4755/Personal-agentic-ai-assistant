@@ -6,8 +6,14 @@ import re
 genai = None
 _genai_import_attempted = False
 
-ERROR_MESSAGE = "Sorry, AI is not available right now."
-DEFAULT_MODEL_NAME = "gemini-2.5-flash-lite"
+ERROR_MESSAGE = "Sorry Sir! But I think that your free tier daily quota is finished, it will renew tomorrow.... But don't worry, you can still ask basic things...."
+MODEL_PRIORITY = [
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "Gemini 3 Flash"
+]
+DEFAULT_MODEL_NAME = MODEL_PRIORITY[0]
 _client = None
 
 
@@ -78,10 +84,18 @@ User request:
 {cleaned_command}
 """
 
-    try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-    except Exception as error:
-        print("Gemini intent error:", error)
+    response = None
+    for model_name in MODEL_PRIORITY:
+        try:
+            print(f"Intent → Trying: {model_name}")
+            response = client.models.generate_content(model=model_name, contents=prompt)
+            if response:
+                break
+        except Exception as error:
+            print(f"{model_name} intent failed:", error)
+            continue
+
+    if not response:
         return {
             "intent": "chat",
             "language": _detect_language(cleaned_command),
@@ -149,16 +163,20 @@ User:
 
 Assistant:"""
 
-    try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-    except Exception as error:
-        print("Gemini error:", error)
-        return ERROR_MESSAGE
+    for model_name in MODEL_PRIORITY:
+        try:
+            print(f"Trying model: {model_name}")
+            response = client.models.generate_content(model=model_name, contents=prompt)
 
-    if response and hasattr(response, "text") and response.text:
-        return response.text.strip()
+            if response and hasattr(response, "text") and response.text:
+                print(f"Success with: {model_name}")
+                return response.text.strip()
 
-    return "I could not generate a proper response."
+        except Exception as error:
+            print(f"{model_name} failed:", error)
+            continue
+
+    return ERROR_MESSAGE
 
 
 def refine_spoken_command(transcript: str) -> str:
@@ -192,10 +210,18 @@ Transcript:
 
 Corrected command:"""
 
-    try:
-        response = client.models.generate_content(model=model_name, contents=cleanup_prompt)
-    except Exception as error:
-        print("Gemini speech cleanup error:", error)
+    response = None
+    for model_name in MODEL_PRIORITY:
+        try:
+            print(f"Speech cleanup → Trying: {model_name}")
+            response = client.models.generate_content(model=model_name, contents=cleanup_prompt)
+            if response:
+                break
+        except Exception as error:
+            print(f"{model_name} cleanup failed:", error)
+            continue
+
+    if not response:
         return cleaned_transcript
 
     if response and hasattr(response, "text") and response.text:
@@ -205,16 +231,17 @@ Corrected command:"""
     return cleaned_transcript
 
 
-def generate_fullstack_project(request_text: str, project_name: str) -> str | None:
+def generate_code_files(request_text: str, project_name: str, files: list[str], project_type: str) -> str | None:
     cleaned_request = request_text.strip()
-    cleaned_project_name = project_name.strip() or "Personal Full Stack App"
+    cleaned_project_name = project_name.strip() or "Developer Project"
 
     client, model_name, model_error = _get_client()
     if client is None:
         print("Gemini error:", model_error)
         return None
 
-    prompt = f"""Generate a full stack starter project.
+    file_list = "\n".join(f"- {file_name}" for file_name in files)
+    prompt = f"""Generate source code for a developer assistant.
 
 Project name:
 {cleaned_project_name}
@@ -223,35 +250,57 @@ Original user request:
 {cleaned_request}
 
 Requirements:
-- Use a Python Flask backend.
-- Use a simple HTML, CSS, and vanilla JavaScript frontend.
-- Include CRUD operations for a sample items resource.
-- Include basic authentication with register and login endpoints.
-- Keep the code readable and runnable.
-- Avoid unnecessary dependencies.
+- Generate runnable code only.
+- Do not include explanations, notes, or markdown outside code blocks.
+- Use the exact relative file path as the code fence label.
+- If this is a full stack request, connect the backend and frontend cleanly.
+- If authentication or CRUD is requested, include a minimal working implementation.
+- Keep dependencies minimal.
+
+Project type:
+{project_type}
 
 Return ONLY fenced code blocks.
 Each code block must use the relative file path as the fence label.
 
 Required files:
-- README.md
-- backend/app.py
-- backend/requirements.txt
-- frontend/index.html
-- frontend/styles.css
-- frontend/app.js
+{file_list}
 """
 
-    try:
-        response = client.models.generate_content(model=model_name, contents=prompt)
-    except Exception as error:
-        print("Gemini project generation error:", error)
+    response = None
+    for model_name in MODEL_PRIORITY:
+        try:
+            print(f"Code → Trying: {model_name}")
+            response = client.models.generate_content(model=model_name, contents=prompt)
+            if response:
+                break
+        except Exception as error:
+            print(f"{model_name} code failed:", error)
+            continue
+
+    if not response:
         return None
 
     if response and hasattr(response, "text") and response.text:
         return response.text.strip()
 
     return None
+
+
+def generate_fullstack_project(request_text: str, project_name: str) -> str | None:
+    return generate_code_files(
+        request_text=request_text,
+        project_name=project_name,
+        files=[
+            "README.md",
+            "backend/app.py",
+            "backend/requirements.txt",
+            "frontend/index.html",
+            "frontend/styles.css",
+            "frontend/app.js",
+        ],
+        project_type="fullstack_python",
+    )
 
 
 def _get_client():
