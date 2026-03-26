@@ -219,7 +219,7 @@ class CodeExecutor:
 
         generated_files = {}
         allowed_files = {self._sanitize_relative_path(file_name) for file_name in expected_files}
-        code_blocks = re.findall(r"```([^\n`]+)\n(.*?)```", generated_text, re.DOTALL)
+        code_blocks = re.findall(r"```([^\n`]*)\n(.*?)```", generated_text, re.DOTALL)
         for raw_label, raw_code in code_blocks:
             relative_path = self._sanitize_relative_path(raw_label.strip())
             if relative_path is None or relative_path not in allowed_files:
@@ -233,7 +233,17 @@ class CodeExecutor:
             return generated_files
 
         if len(expected_files) == 1:
-            return {expected_files[0]: generated_text.strip()}
+            if code_blocks:
+                return {expected_files[0]: code_blocks[0][1].strip()}
+            
+            clean_text = generated_text.strip()
+            if clean_text.startswith("```"):
+                first_newline = clean_text.find("\n")
+                if first_newline != -1:
+                    clean_text = clean_text[first_newline + 1:]
+                if clean_text.endswith("```"):
+                    clean_text = clean_text[:-3]
+            return {expected_files[0]: clean_text.strip()}
 
         return {}
 
@@ -872,3 +882,20 @@ button.addEventListener("click", async () => {
         cleaned_value = re.sub(r"[^a-zA-Z0-9\s_-]", "", value.lower())
         words = [word for word in cleaned_value.split() if word]
         return "_".join(words[:5]) or "developer_project"
+
+
+def run_last_generated_code():
+    import os
+
+    project_dir = "projects"
+    latest_project = sorted(os.listdir(project_dir))[-1]
+
+    project_path = os.path.join(project_dir, latest_project)
+
+    for file in os.listdir(project_path):
+        if file.endswith(".py"):
+            file_path = os.path.join(project_path, file)
+            os.system(f"python3 {file_path}")
+            return f"Running {file}"
+
+    return "No runnable Python file found."

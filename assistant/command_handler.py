@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 
 from assistant.agent_manager import AgentManager
-from assistant.code_executor import CodeExecutor
+from assistant.code_executor import CodeExecutor, run_last_generated_code
 from assistant.gemini_brain import detect_intent, generate_assistant_response
 from assistant.system_control import SystemControl
 
@@ -24,6 +24,11 @@ class CommandHandler:
         system_response = self.system_control.handle_command(command)
         if system_response:
             return system_response, False
+
+        if any(word in command for word in [
+            "run", "execute", "run it", "run code", "execute code", "terminal"
+        ]):
+            return run_last_generated_code(), False
 
         if self.code_executor.is_code_request(command):
             result = self.code_executor.execute_code_request(command)

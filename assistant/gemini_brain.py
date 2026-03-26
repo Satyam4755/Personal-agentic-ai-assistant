@@ -8,7 +8,6 @@ _genai_import_attempted = False
 
 ERROR_MESSAGE = "Sorry Sir! But I think that your free tier daily quota is finished, it will renew tomorrow.... But don't worry, you can still ask basic things...."
 MODEL_PRIORITY = [
-    "gemini-3.1-flash-lite",
     "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
     "Gemini 3 Flash"
