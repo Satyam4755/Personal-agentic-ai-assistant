@@ -2,7 +2,8 @@ import sys
 import threading
 import queue
 import time
-from app import app as flask_app, emit_event, command_queue
+from server import app as flask_app, emit_event
+import server
 
 class SSEStdoutRedirector:
     def __init__(self, original_stdout):
@@ -57,12 +58,18 @@ def main():
 
     agent_manager = AgentManager()
     voice_engine = VoiceEngine()
+    command_handler = CommandHandler(agent_manager=agent_manager)
+    command_handler.voice_engine = voice_engine
     
+    # Expose them to Flask
+    server.command_handler = command_handler
+
     # Patches for UI integration
     original_speak = voice_engine.speak
     def custom_speak(text):
         if not text: return
-        emit_event('chat', role='assistant', content=text)
+        if not getattr(voice_engine, "_suppress_ui_chat", False):
+            emit_event('chat', role='assistant', content=text)
         emit_event('state', status='speaking')
         original_speak(text)
         emit_event('state', status='idle')
@@ -76,16 +83,6 @@ def main():
         return cmd
     voice_engine._listen_from_microphone = custom_microphone
 
-    def custom_terminal_listen():
-        try:
-            # Poll UI command queue instead of input() blocking
-            return command_queue.get(timeout=0.2)
-        except queue.Empty:
-            return None
-    voice_engine._listen_from_terminal = custom_terminal_listen
-
-    command_handler = CommandHandler(agent_manager=agent_manager)
-
     print("Assistant loop started. Press Ctrl+C to stop.")
     if voice_engine.has_voice_input():
         print("- Voice input is ready.")
@@ -95,34 +92,14 @@ def main():
     voice_engine.speak("Assistant is ready. Say a command.")
 
     try:
-        exit_commands = ["bye", "bye bye", "exit", "stop", "quit"]
-
         while True:
             command = voice_engine.listen()
             if not command:
                 continue
 
-            text_lower = command.lower().strip()
-
-            # Custom small talk responses
-            if "hello" in text_lower:
-                response = "Hello sir, kaise hai aap"
-                voice_engine.speak(response)
-                continue
-
-            if "tum kaise ho" in text_lower or "kaise ho" in text_lower:
-                response = "Mai bhi badhiya hu sir, bataiye mai kaise apki madad karu"
-                voice_engine.speak(response)
-                continue
-
-            # Handle exit commands directly
-            if any(cmd in text_lower for cmd in exit_commands):
-                response = "Goodbye Sir! 👋"
-                voice_engine.speak(response)
-                break
-
             agent_manager.remember_context(command)
             response, should_exit = command_handler.handle_command(command)
+            
             voice_engine.speak(response)
 
             if should_exit:

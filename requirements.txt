@@ -4,3 +4,4 @@ SpeechRecognition
 PyAudio
 python-dotenv
 flask
+pywebview

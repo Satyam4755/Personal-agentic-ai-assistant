@@ -10,7 +10,6 @@ ERROR_MESSAGE = "Sorry Sir! But I think that your free tier daily quota is finis
 MODEL_PRIORITY = [
     "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
-    "Gemini 3 Flash"
 ]
 DEFAULT_MODEL_NAME = MODEL_PRIORITY[0]
 _client = None

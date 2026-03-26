@@ -118,7 +118,7 @@ body {
     gap: 10px;
 }
 
-#chat-input {
+#commandInput {
     flex: 1;
     background: rgba(0,0,0,0.3);
     border: 1px solid var(--glass-border);
@@ -130,7 +130,7 @@ body {
     transition: border-color 0.2s;
 }
 
-#chat-input:focus {
+#commandInput:focus {
     border-color: var(--neon-blue);
 }
 

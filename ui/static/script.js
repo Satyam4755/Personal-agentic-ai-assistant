@@ -1,6 +1,4 @@
 const chatMessages = document.getElementById('chat-messages');
-const chatInput = document.getElementById('chat-input');
-const sendBtn = document.getElementById('send-btn');
 const orb = document.getElementById('assistant-orb');
 const terminalOutput = document.getElementById('terminal-output');
 
@@ -21,29 +19,48 @@ function logTerminal(text) {
     terminalOutput.scrollTop = terminalOutput.scrollHeight;
 }
 
-// Handle sending commands
-async function sendCommand() {
-    const text = chatInput.value.trim();
-    if (!text) return;
-
-    // Echo to UI
+// Utility wrappers for exactly matching requested API
+function addUserMessage(text) {
     addMessage('user', text);
-    chatInput.value = '';
-
-    try {
-        await fetch('/command', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: text })
-        });
-    } catch (err) {
-        logTerminal(`Error sending command: ${err.message}`);
-    }
 }
 
-sendBtn.addEventListener('click', sendCommand);
-chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
+function addAssistantMessage(text) {
+    addMessage('assistant', text);
+}
+
+function sendCommand() {
+    const inputEl = document.getElementById("commandInput");
+    const command = inputEl.value.trim();
+
+    if (!command) return;
+    
+    console.log("Sending command:", command);
+
+    addUserMessage(command);
+
+    fetch("/command", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ command })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.response) {
+            addAssistantMessage(data.response);
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        addAssistantMessage("Error processing command");
+    });
+
+    inputEl.value = "";
+}
+
+document.getElementById("commandInput").addEventListener("keypress", function(e) {
+    if (e.key === "Enter") {
         sendCommand();
     }
 });

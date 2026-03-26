@@ -14,12 +14,23 @@ class CommandHandler:
         self.code_executor = CodeExecutor(system_control=self.system_control)
 
     def handle_command(self, command):
+        if any(word in command.lower() for word in ["bye", "goodbye", "exit", "quit"]):
+            response = "Goodbye Sir! 👋"
+            import threading, os
+            def delayed_exit():
+                import time
+                time.sleep(1.5)
+                os._exit(0)
+            threading.Thread(target=delayed_exit, daemon=True).start()
+            return response, True
+
+        basic_commands = ["hello", "hi", "hey", "tum kaise ho", "kaise ho"]
+        if any(cmd in command.lower() for cmd in basic_commands):
+            return self._handle_basic(command)
+
         normalized_command = self.normalize(command)
         if not normalized_command:
             return "I did not catch that. Please try again.", False
-
-        if self._is_direct_exit_command(normalized_command):
-            return "Goodbye! Have a nice day.", True
 
         system_response = self.system_control.handle_command(command)
         if system_response:
@@ -51,6 +62,17 @@ class CommandHandler:
         context_prompt = self.agent_manager.get_context_prompt(command)
         gemini_response = generate_assistant_response(command, context_prompt=context_prompt)
         return gemini_response or "Sorry, I am having trouble connecting right now.", False
+
+    def _handle_basic(self, command):
+        command = command.lower()
+
+        if "hello" in command or "hi" in command or "hey" in command:
+            return "Hello sir, kaise hai aap", False
+
+        if "tum kaise ho" in command or "kaise ho" in command:
+            return "Mai bhi badhiya hu sir, bataiye mai kaise apki madad karu", False
+
+        return "Yes sir?", False
 
     def normalize(self, text):
         normalized_text = text.lower().replace("’", "'")

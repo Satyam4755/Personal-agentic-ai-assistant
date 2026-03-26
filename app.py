@@ -1,48 +1,15 @@
-import queue
-import json
-from flask import Flask, send_from_directory, request, Response
-import logging
+import webview
+import threading
+from main import main as start_backend
 
-app = Flask(__name__, template_folder='ui/templates', static_folder='ui/static')
-# Suppress werkzeug logging to avoid cluttering our terminal logs stream
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
+def start_assistant():
+    # Starts both the assistant loop and the Flask API
+    start_backend()
 
-clients = []
-command_queue = queue.Queue()
-
-def emit_event(event_type, **kwargs):
-    kwargs['type'] = event_type
-    data = json.dumps(kwargs)
-    for q in list(clients):
-        try:
-            q.put_nowait(data)
-        except queue.Full:
-            pass
-
-@app.route('/')
-def index():
-    return send_from_directory('ui/templates', 'index.html')
-
-@app.route('/stream')
-def stream():
-    def event_stream(q):
-        try:
-            while True:
-                data = q.get()
-                yield f"data: {data}\n\n"
-        except GeneratorExit:
-            if q in clients:
-                clients.remove(q)
-
-    # Max size ensures disconnected clients don't bloat memory
-    q = queue.Queue(maxsize=100)
-    clients.append(q)
-    return Response(event_stream(q), mimetype="text/event-stream")
-
-@app.route('/command', methods=['POST'])
-def command():
-    content = request.json.get('command')
-    if content:
-        command_queue.put(content)
-    return {"status": "ok"}
+if __name__ == '__main__':
+    # Run the entire backend in a background thread
+    threading.Thread(target=start_assistant, daemon=True).start()
+    
+    # Run PyWebview on the main thread
+    webview.create_window("Jarvis Assistant", "http://127.0.0.1:3425")
+    webview.start()
