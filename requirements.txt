@@ -5,3 +5,5 @@ PyAudio
 python-dotenv
 flask
 pywebview
+groq
+openai

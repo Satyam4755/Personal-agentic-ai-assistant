@@ -14,6 +14,64 @@ MODEL_PRIORITY = [
 DEFAULT_MODEL_NAME = MODEL_PRIORITY[0]
 _client = None
 
+def call_groq(prompt):
+    try:
+        from groq import Groq
+        client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
+        res = client.chat.completions.create(
+            model="llama3-70b-8192",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return res.choices[0].message.content.strip()
+    except Exception as e:
+        print("Groq error:", e)
+        return None
+
+def call_openai(prompt):
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return res.choices[0].message.content.strip()
+    except Exception as e:
+        print("OpenAI error:", e)
+        return None
+
+def run_with_fallback(client, prompt):
+    # 1. GEMINI
+    for model_name in MODEL_PRIORITY:
+        try:
+            print(f"Trying Gemini: {model_name}")
+            response = client.models.generate_content(model=model_name, contents=prompt)
+
+            if response and hasattr(response, "text") and response.text:
+                print(f"Gemini success: {model_name}")
+                return response.text.strip()
+
+        except Exception as e:
+            print(f"Gemini failed: {model_name}", e)
+
+    # 2. GROQ
+    print("Trying Groq...")
+    result = call_groq(prompt)
+    if result:
+        print("Groq success")
+        return result
+
+    # 3. OPENAI
+    print("Trying OpenAI...")
+    result = call_openai(prompt)
+    if result:
+        print("OpenAI success")
+        return result
+
+    return None
+
 
 def get_startup_status():
     try:
@@ -82,25 +140,9 @@ User request:
 {cleaned_command}
 """
 
-    response = None
-    for model_name in MODEL_PRIORITY:
-        try:
-            print(f"Intent → Trying: {model_name}")
-            response = client.models.generate_content(model=model_name, contents=prompt)
-            if response:
-                break
-        except Exception as error:
-            print(f"{model_name} intent failed:", error)
-            continue
+    response_text = run_with_fallback(client, prompt)
 
-    if not response:
-        return {
-            "intent": "chat",
-            "language": _detect_language(cleaned_command),
-            "confidence": "low",
-        }
-
-    if not response or not hasattr(response, "text") or not response.text:
+    if not response_text:
         return {
             "intent": "chat",
             "language": _detect_language(cleaned_command),
@@ -108,7 +150,7 @@ User request:
         }
 
     try:
-        parsed = _extract_json_object(response.text)
+        parsed = _extract_json_object(response_text)
     except ValueError:
         parsed = {}
 
@@ -161,18 +203,9 @@ User:
 
 Assistant:"""
 
-    for model_name in MODEL_PRIORITY:
-        try:
-            print(f"Trying model: {model_name}")
-            response = client.models.generate_content(model=model_name, contents=prompt)
-
-            if response and hasattr(response, "text") and response.text:
-                print(f"Success with: {model_name}")
-                return response.text.strip()
-
-        except Exception as error:
-            print(f"{model_name} failed:", error)
-            continue
+    response_text = run_with_fallback(client, prompt)
+    if response_text:
+        return response_text
 
     return ERROR_MESSAGE
 
@@ -208,22 +241,10 @@ Transcript:
 
 Corrected command:"""
 
-    response = None
-    for model_name in MODEL_PRIORITY:
-        try:
-            print(f"Speech cleanup → Trying: {model_name}")
-            response = client.models.generate_content(model=model_name, contents=cleanup_prompt)
-            if response:
-                break
-        except Exception as error:
-            print(f"{model_name} cleanup failed:", error)
-            continue
-
-    if not response:
-        return cleaned_transcript
-
-    if response and hasattr(response, "text") and response.text:
-        refined_text = response.text.strip().splitlines()[0].strip().strip('"').strip("'")
+    response_text = run_with_fallback(client, cleanup_prompt)
+    
+    if response_text:
+        refined_text = response_text.strip().splitlines()[0].strip().strip('"').strip("'")
         return refined_text or cleaned_transcript
 
     return cleaned_transcript
@@ -265,22 +286,9 @@ Required files:
 {file_list}
 """
 
-    response = None
-    for model_name in MODEL_PRIORITY:
-        try:
-            print(f"Code → Trying: {model_name}")
-            response = client.models.generate_content(model=model_name, contents=prompt)
-            if response:
-                break
-        except Exception as error:
-            print(f"{model_name} code failed:", error)
-            continue
-
-    if not response:
-        return None
-
-    if response and hasattr(response, "text") and response.text:
-        return response.text.strip()
+    response_text = run_with_fallback(client, prompt)
+    if response_text:
+        return response_text
 
     return None
 
