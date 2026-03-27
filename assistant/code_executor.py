@@ -80,6 +80,9 @@ class CodeExecutor:
         if open_editor:
             editor_status = self.system_control.open_vs_code(project_directory)
 
+        from assistant.state_manager import set_last_project
+        set_last_project(project_directory)
+
         return {
             "project_path": project_directory,
             "written_files": written_files,

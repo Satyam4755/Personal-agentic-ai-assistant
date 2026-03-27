@@ -20,7 +20,7 @@ def call_groq(prompt):
         client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
         res = client.chat.completions.create(
-            model="llama3-70b-8192",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}]
         )
         return res.choices[0].message.content.strip()
@@ -260,33 +260,44 @@ def generate_code_files(request_text: str, project_name: str, files: list[str], 
         return None
 
     file_list = "\n".join(f"- {file_name}" for file_name in files)
-    prompt = f"""Generate source code for a developer assistant.
+    prompt = f"""You are a senior software engineer.
 
-Project name:
+STRICT RULES:
+- Always generate COMPLETE working code
+- NEVER generate starter template
+- NEVER generate placeholder text
+- Code must be runnable immediately
+- Include full logic as per request
+
+If user asks for:
+"banking system"
+
+You MUST include:
+- Account balance variable
+- Deposit function
+- Withdraw function
+- Balance check
+- Menu loop (while True)
+- Input handling
+
+OUTPUT FORMAT:
+Only code blocks with file paths.
+
+Project:
 {cleaned_project_name}
 
-Original user request:
+User request:
 {cleaned_request}
-
-Requirements:
-- Generate runnable code only.
-- Do not include explanations, notes, or markdown outside code blocks.
-- Use the exact relative file path as the code fence label.
-- If this is a full stack request, connect the backend and frontend cleanly.
-- If authentication or CRUD is requested, include a minimal working implementation.
-- Keep dependencies minimal.
-
-Project type:
-{project_type}
-
-Return ONLY fenced code blocks.
-Each code block must use the relative file path as the fence label.
-
-Required files:
-{file_list}
 """
 
     response_text = run_with_fallback(client, prompt)
+    
+    if response_text:
+        if "starter file" in response_text.lower() or response_text.count("\n") < 15:
+            print("Force Real Code: Output too small or contains placeholder. Retrying...")
+            retry_prompt = prompt + "\n\nGenerate full implementation, not starter code"
+            response_text = run_with_fallback(client, retry_prompt)
+
     if response_text:
         return response_text
 

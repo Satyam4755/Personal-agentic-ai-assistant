@@ -24,9 +24,10 @@ class CommandHandler:
             threading.Thread(target=delayed_exit, daemon=True).start()
             return response, True
 
+        command_lower = command.lower().strip()
         basic_commands = ["hello", "hi", "hey", "tum kaise ho", "kaise ho"]
-        if any(cmd in command.lower() for cmd in basic_commands):
-            return self._handle_basic(command)
+        if command_lower in basic_commands:
+            return self._handle_basic(command_lower)
 
         normalized_command = self.normalize(command)
         if not normalized_command:
@@ -39,7 +40,27 @@ class CommandHandler:
         if any(word in command for word in [
             "run", "execute", "run it", "run code", "execute code", "terminal"
         ]):
-            return run_last_generated_code(), False
+            from assistant.state_manager import get_last_project
+            import os
+            
+            project_path = get_last_project()
+            if project_path:
+                main_file = os.path.join(project_path, "main.py")
+                app_file = os.path.join(project_path, "app.py")
+                if os.path.exists(main_file):
+                    os.system(f"python3 '{main_file}'")
+                    return "Running main.py in latest project", False
+                elif os.path.exists(app_file):
+                    os.system(f"python3 '{app_file}'")
+                    return "Running app.py in latest project", False
+                else:
+                    for f in os.listdir(project_path):
+                        if f.endswith(".py"):
+                            os.system(f"python3 '{os.path.join(project_path, f)}'")
+                            return f"Running {f} in latest project", False
+                    return "No executable python file found in the generated project.", False
+            else:
+                return run_last_generated_code(), False
 
         if self.code_executor.is_code_request(command):
             result = self.code_executor.execute_code_request(command)
@@ -64,12 +85,12 @@ class CommandHandler:
         return gemini_response or "Sorry, I am having trouble connecting right now.", False
 
     def _handle_basic(self, command):
-        command = command.lower()
+        command = command.lower().strip()
 
-        if "hello" in command or "hi" in command or "hey" in command:
+        if command in ["hello", "hi", "hey"]:
             return "Hello sir, kaise hai aap", False
 
-        if "tum kaise ho" in command or "kaise ho" in command:
+        if command in ["tum kaise ho", "kaise ho"]:
             return "Mai bhi badhiya hu sir, bataiye mai kaise apki madad karu", False
 
         return "Yes sir?", False
