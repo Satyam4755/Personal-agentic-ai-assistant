@@ -14,17 +14,11 @@ class CommandHandler:
         self.code_executor = CodeExecutor(system_control=self.system_control)
 
     def handle_command(self, command):
-        if any(word in command.lower() for word in ["bye", "goodbye", "exit", "quit"]):
-            response = "Goodbye Sir! 👋"
-            import threading, os
-            def delayed_exit():
-                import time
-                time.sleep(1.5)
-                os._exit(0)
-            threading.Thread(target=delayed_exit, daemon=True).start()
-            return response, True
+        command = command.lower().strip()
+        if any(word in command for word in ["bye", "exit", "quit", "goodbye"]):
+            return "Goodbye Sir!", True
 
-        command_lower = command.lower().strip()
+        command_lower = command
         basic_commands = ["hello", "hi", "hey", "tum kaise ho", "kaise ho"]
         if command_lower in basic_commands:
             return self._handle_basic(command_lower)
@@ -32,6 +26,11 @@ class CommandHandler:
         normalized_command = self.normalize(command)
         if not normalized_command:
             return "I did not catch that. Please try again.", False
+
+        from assistant.memory_engine import handle_memory
+        memory_response = handle_memory(command)
+        if memory_response:
+            return memory_response, False
 
         system_response = self.system_control.handle_command(command)
         if system_response:

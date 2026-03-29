@@ -210,12 +210,27 @@ Assistant:"""
     return ERROR_MESSAGE
 
 
+def basic_cleanup(text):
+    return text.lower().strip()
+
+
 def refine_spoken_command(transcript: str) -> str:
-    cleaned_transcript = transcript.strip()
+    cleaned_transcript = basic_cleanup(transcript)
     if not cleaned_transcript:
         return ""
 
-    client, model_name, model_error = _get_client()
+    COMMON_FIXES = {
+        "goo gal": "google",
+        "vs cody": "vscode",
+        "v s code": "vscode",
+        "chat g p t": "chatgpt",
+    }
+    
+    for bad_word, good_word in COMMON_FIXES.items():
+        if bad_word in cleaned_transcript:
+            cleaned_transcript = cleaned_transcript.replace(bad_word, good_word)
+
+    client, _, model_error = _get_client()
     if client is None:
         if model_error:
             print("Gemini speech cleanup skipped:", model_error)
@@ -241,11 +256,18 @@ Transcript:
 
 Corrected command:"""
 
-    response_text = run_with_fallback(client, cleanup_prompt)
-    
-    if response_text:
-        refined_text = response_text.strip().splitlines()[0].strip().strip('"').strip("'")
-        return refined_text or cleaned_transcript
+    try:
+        print("Speech cleanup → Using Gemini only")
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=cleanup_prompt
+        )
+        if response and hasattr(response, "text") and response.text:
+            refined_text = response.text.strip().splitlines()[0].strip().strip('"').strip("'")
+            return refined_text or cleaned_transcript
+    except Exception as e:
+        print("Gemini cleanup failed:", e)
+        return cleaned_transcript
 
     return cleaned_transcript
 
@@ -318,6 +340,38 @@ def generate_fullstack_project(request_text: str, project_name: str) -> str | No
         ],
         project_type="fullstack_python",
     )
+
+
+def convert_to_hindi(text: str) -> str:
+    """
+    Convert Hinglish text to proper Hindi script using AI fallback system.
+    """
+    if not text.strip():
+        return text
+
+    prompt = f"""
+Convert the following Hinglish sentence into proper Hindi (Devanagari script).
+
+Rules:
+- Keep meaning EXACT same
+- Do NOT translate English words unnecessarily
+- Only convert Hindi words written in Latin script
+- Return ONLY the converted sentence
+
+Text:
+{text}
+"""
+
+    try:
+        client, _, _ = _get_client()
+        result = run_with_fallback(client, prompt)
+
+        if result:
+            return result.strip()
+    except Exception as e:
+        print("Hinglish conversion error:", e)
+
+    return text
 
 
 def _get_client():

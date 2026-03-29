@@ -14,8 +14,43 @@ try:
 except ImportError:
     sr = None
 
-from assistant.gemini_brain import refine_spoken_command
+from assistant.gemini_brain import detect_intent, convert_to_hindi
 
+def normalize_command(text):
+    text = text.lower().strip()
+    replacements = {
+        "bye bye": "bye",
+        "ok bye": "bye",
+        "okay bye": "bye",
+        "bye-bye": "bye",
+        "拜拜": "bye"
+    }
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+    return text
+
+def normalize_for_voice(text):
+    hinglish_map = {
+        "kaise ho": "कैसे हो",
+        "kaise hai aap": "कैसे हैं आप",
+        "main thik hun": "मैं ठीक हूँ",
+    }
+    for k, v in hinglish_map.items():
+        text = text.replace(k, v)
+    return text
+
+whisper_model = None
+
+def load_whisper():
+    global whisper_model
+    if whisper_model is None:
+        try:
+            from faster_whisper import WhisperModel
+            print("Loading faster-whisper model (base)...")
+            whisper_model = WhisperModel("base", compute_type="int8")
+        except Exception as e:
+            print("Failed to load whisper:", e)
+            whisper_model = False
 
 class VoiceEngine:
     def __init__(self):
@@ -26,6 +61,8 @@ class VoiceEngine:
         self.engine = None
         self.voice_disabled = False
         self._ambient_noise_calibrated = False
+        self.ELEVEN_ENABLED = True
+        self.AUDIO_DISABLED = False
         self.listen_timeout = float(os.getenv("ASSISTANT_LISTEN_TIMEOUT", "5"))
         self.phrase_time_limit = float(os.getenv("ASSISTANT_PHRASE_TIME_LIMIT", "10"))
         self.speech_languages = [
@@ -43,16 +80,84 @@ class VoiceEngine:
             return
 
         print(f"Assistant: {text}")
-        if self.disable_tts:
+
+        if self.disable_tts or getattr(self, "AUDIO_DISABLED", False):
             return
 
-        if self.system_name == "Darwin" and shutil.which("say"):
-            subprocess.run(["say", text], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        skip_words = ["error", "traceback", "code generated", "```", "def ", "function "]
+        for word in skip_words:
+            if word in text.lower():
+                return
+
+        self.smart_speak(text)
+
+    def smart_speak(self, text):
+        MAX_ELEVEN_CHARS = 150
+        text = normalize_for_voice(text)
+
+        try:
+            intent_data = detect_intent(text)
+            language = intent_data.get("language", "english")
+            if language == "hinglish":
+                text = convert_to_hindi(text)
+        except Exception as e:
+            pass
+
+        api_key = os.getenv("ELEVENLABS_API_KEY") or os.getenv("ELEVEN_API_KEY")
+        eleven_enabled = getattr(self, "ELEVEN_ENABLED", True)
+
+        if api_key and eleven_enabled and len(text) <= MAX_ELEVEN_CHARS:
+            try:
+                import requests
+                import subprocess
+
+                print("Using ElevenLabs REST API...")
+                url = "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL"
+                headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
+                data = {"text": text, "model_id": "eleven_multilingual_v2"}
+                response = requests.post(url, json=data, headers=headers)
+                
+                if response.status_code == 200:
+                    with open("temp_audio.mp3", "wb") as f:
+                        f.write(response.content)
+                    subprocess.run(["afplay", "temp_audio.mp3"])
+                    return
+                else:
+                    print(f"ElevenLabs API Error [{response.status_code}]: Quota exhausted or Unauthorized.")
+                    self.ELEVEN_ENABLED = False
+            except Exception as e:
+                print("ElevenLabs Exception:", e)
+                self.ELEVEN_ENABLED = False
+
+        print("Falling back to Google TTS (gTTS)...")
+        try:
+            import subprocess
+            from gtts import gTTS
+            tts = gTTS(text=text, lang='hi' if any('\u0900' <= c <= '\u097F' for c in text) else 'en')
+            filename = "temp_fallback.mp3"
+            tts.save(filename)
+            subprocess.run(["afplay", filename])
+            return
+        except Exception as e:
+            print("gTTS failed:", e)
+
+        print("Falling back to system absolute TTS...")
+        self.fallback_tts(text)
+
+    def fallback_tts(self, text):
+        if getattr(self, "AUDIO_DISABLED", False):
             return
 
-        if self.engine is not None:
-            self.engine.say(text)
-            self.engine.runAndWait()
+        try:
+            if self.system_name == "Darwin" and shutil.which("say"):
+                subprocess.run(["say", text], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+
+            if self.engine is not None:
+                self.engine.say(text)
+                self.engine.runAndWait()
+        except Exception as e:
+            print("TTS failed:", e)
 
     def stop(self):
         if self.engine is not None:
@@ -114,6 +219,8 @@ class VoiceEngine:
         if not self.has_voice_input():
             return None
 
+        load_whisper()
+        
         try:
             with self.microphone as source:
                 print("Listening...")
@@ -121,10 +228,11 @@ class VoiceEngine:
                     self.recognizer.adjust_for_ambient_noise(source, duration=0.4)
                     self._ambient_noise_calibrated = True
 
+                # Record audio from mic (4-5 sec)
                 audio = self.recognizer.listen(
                     source,
                     timeout=self.listen_timeout,
-                    phrase_time_limit=self.phrase_time_limit,
+                    phrase_time_limit=5.0,
                 )
         except sr.WaitTimeoutError:
             return None
@@ -134,10 +242,34 @@ class VoiceEngine:
             self.voice_disabled = True
             return None
 
-        transcript = self._recognize_audio(audio)
+        if not whisper_model:
+            return self._fallback_listen_microphone_audio(audio)
+
+        import tempfile
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                f.write(audio.get_wav_data())
+                temp_filename = f.name
+            
+            segments, info = whisper_model.transcribe(temp_filename, beam_size=5, language="en", condition_on_previous_text=False)
+            transcript = "".join(segment.text for segment in segments).strip()
+            os.remove(temp_filename)
+            
+            print("Recognized Text:", transcript)
+        except Exception as e:
+            print("Whisper transcription error:", e)
+            return self._fallback_listen_microphone_audio(audio)
+
         if not transcript:
             return None
 
+        cleaned_transcript = self._prepare_spoken_command(transcript)
+        return cleaned_transcript or None
+
+    def _fallback_listen_microphone_audio(self, audio):
+        transcript = self._recognize_audio(audio)
+        if not transcript:
+            return None
         cleaned_transcript = self._prepare_spoken_command(transcript)
         return cleaned_transcript or None
 
@@ -173,12 +305,4 @@ class VoiceEngine:
     def _prepare_spoken_command(self, command):
         if not command:
             return None
-
-        cleaned_command = re.sub(r"\s+", " ", command).strip()
-        normalized_command = cleaned_command.lower()
-        if len(normalized_command.split()) >= 2:
-            refined_command = refine_spoken_command(normalized_command).strip()
-            if refined_command:
-                return refined_command
-
-        return cleaned_command
+        return normalize_command(command)

@@ -61,6 +61,11 @@ def main():
     command_handler = CommandHandler(agent_manager=agent_manager)
     command_handler.voice_engine = voice_engine
     
+    def test_elevenlabs():
+        voice_engine.smart_speak("Hello sir, kaise hai aap")
+    
+    test_elevenlabs()
+
     # Expose them to Flask
     server.command_handler = command_handler
 
@@ -86,6 +91,7 @@ def main():
     print("Assistant loop started. Press Ctrl+C to stop.")
     if voice_engine.has_voice_input():
         print("- Voice input is ready.")
+        print("VOICE SYSTEM READY")
     else:
         print("- Voice input is unavailable. Falling back to typed commands.")
 
@@ -93,21 +99,34 @@ def main():
 
     try:
         while True:
-            command = voice_engine.listen()
-            if not command:
-                continue
+            try:
+                command = voice_engine.listen()
+                if not command:
+                    continue
 
-            agent_manager.remember_context(command)
-            response, should_exit = command_handler.handle_command(command)
-            
-            voice_engine.speak(response)
+                if any(word in command for word in ["bye", "exit", "quit", "goodbye"]):
+                    voice_engine.speak("Goodbye Sir!")
+                    break
 
-            if should_exit:
-                break
+                agent_manager.remember_context(command)
+                response, should_exit = command_handler.handle_command(command)
+                
+                if response:
+                    voice_engine.speak(response)
+
+                if should_exit:
+                    break
+
+            except Exception as e:
+                print("Loop exception:", e)
+
     except KeyboardInterrupt:
         print("\nStopping assistant.")
     finally:
+        print("Assistant stopped.")
         voice_engine.stop()
+        import os
+        os._exit(0)
 
 
 if __name__ == "__main__":

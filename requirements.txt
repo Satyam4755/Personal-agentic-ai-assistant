@@ -7,3 +7,8 @@ flask
 pywebview
 groq
 openai
+
+faster-whisper
+requests
+
+elevenlabs
