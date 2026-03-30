@@ -53,8 +53,8 @@ def load_whisper():
     if whisper_model is None:
         try:
             from faster_whisper import WhisperModel
-            print("Loading faster-whisper model (base)...")
-            whisper_model = WhisperModel("base", compute_type="int8")
+            print("Loading faster-whisper model (small)...")
+            whisper_model = WhisperModel("small", compute_type="int8")
         except Exception as e:
             print("Failed to load whisper:", e)
             whisper_model = False
@@ -247,11 +247,16 @@ class VoiceEngine:
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 f.write(audio.get_wav_data())
                 temp_filename = f.name
-            
-            segments, info = whisper_model.transcribe(temp_filename, beam_size=5, language="en", condition_on_previous_text=False)
+            segments, info = whisper_model.transcribe(
+                temp_filename,
+                beam_size=5,
+                language=None,
+                condition_on_previous_text=False
+            )
             transcript = "".join(segment.text for segment in segments).strip()
             os.remove(temp_filename)
             
+            transcript = transcript.replace("lakno", "lucknow")
             print("Recognized Text:", transcript)
         except Exception as e:
             print("Whisper transcription error:", e)
