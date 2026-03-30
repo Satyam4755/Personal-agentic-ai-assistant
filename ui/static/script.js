@@ -98,5 +98,53 @@ function setupEventStream() {
     logTerminal('Connected to Assistant Core API.');
 }
 
+// Interactive Feature Logic
+let isVoiceEnabled = true;
+
+function toggleVoiceBtn() {
+    isVoiceEnabled = !isVoiceEnabled;
+    const btn = document.getElementById("voice-toggle-btn");
+    
+    if (isVoiceEnabled) {
+        btn.innerHTML = "🔊 Voice ON";
+        btn.classList.remove("inactive");
+        btn.classList.add("active");
+        logTerminal("Voice interface globally restored.");
+    } else {
+        btn.innerHTML = "🔇 Voice OFF";
+        btn.classList.remove("active");
+        btn.classList.add("inactive");
+        logTerminal("Voice interface globally muted.");
+    }
+    
+    fetch("/toggle_voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: isVoiceEnabled })
+    });
+}
+
+function interruptVoice() {
+    logTerminal("Vocal generator hardware interrupted.");
+    fetch("/stop", { method: "POST" });
+}
+
+// Ripple DOM Event Hook
+document.querySelectorAll('.ui-controls button').forEach(button => {
+    button.addEventListener('mousedown', function(e) {
+        let rect = this.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+        
+        let ripples = document.createElement('span');
+        ripples.style.left = x + 'px';
+        ripples.style.top = y + 'px';
+        ripples.classList.add('ripple');
+        
+        this.appendChild(ripples);
+        setTimeout(() => { ripples.remove() }, 600);
+    });
+});
+
 // Initialize
 setupEventStream();

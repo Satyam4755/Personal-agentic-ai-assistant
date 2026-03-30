@@ -64,3 +64,17 @@ def handle_command():
             pass
 
     return {"response": response}
+
+@app.route('/toggle_voice', methods=['POST'])
+def toggle_voice_api():
+    data = request.json
+    state = data.get('state', True)
+    from assistant.voice_engine import toggle_voice
+    toggle_voice(state)
+    return {"status": "success", "voice_enabled": state}
+
+@app.route('/stop', methods=['POST'])
+def stop():
+    if command_handler and hasattr(command_handler, "voice_engine"):
+        command_handler.voice_engine.stop_speaking()
+    return {"status": "stopped"}

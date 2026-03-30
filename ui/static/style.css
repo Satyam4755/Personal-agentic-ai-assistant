@@ -280,3 +280,80 @@ body {
     background: rgba(0, 255, 0, 0.3);
     border-radius: 10px;
 }
+
+/* UI Controls Section */
+.ui-controls {
+    display: flex;
+    gap: 15px;
+    padding: 0 15px 15px 15px;
+    justify-content: center;
+}
+
+#voice-toggle-btn, #interrupt-btn {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+#voice-toggle-btn:hover, #interrupt-btn:hover {
+    transform: scale(1.05);
+}
+
+#voice-toggle-btn:active, #interrupt-btn:active {
+    transform: scale(0.95);
+}
+
+/* Voice Toggle Colors */
+#voice-toggle-btn.active {
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+    color: var(--neon-blue);
+}
+
+#voice-toggle-btn.inactive {
+    border-color: #ff5f56;
+    box-shadow: 0 0 15px rgba(255, 95, 86, 0.4);
+    color: #ff5f56;
+}
+
+/* Interrupt Button Colors */
+#interrupt-btn {
+    border-color: #ffbd2e;
+    color: #ffbd2e;
+}
+
+#interrupt-btn:hover {
+    box-shadow: 0 0 15px rgba(255, 189, 46, 0.6);
+    background: rgba(255, 189, 46, 0.1);
+}
+
+/* Circular Ripple Animation */
+.ripple {
+    position: absolute;
+    border-radius: 50%;
+    transform: scale(0);
+    animation: ripple-effect 0.6s linear;
+    background-color: rgba(255, 255, 255, 0.2);
+    pointer-events: none;
+    width: 20px;
+    height: 20px;
+    margin-top: -10px;
+    margin-left: -10px;
+}
+
+@keyframes ripple-effect {
+    to {
+        transform: scale(15);
+        opacity: 0;
+    }
+}

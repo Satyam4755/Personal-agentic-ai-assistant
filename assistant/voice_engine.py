@@ -148,7 +148,15 @@ class VoiceEngine:
                 print("ElevenLabs Exception:", e)
                 self.ELEVEN_ENABLED = False
 
+    def stop_speaking(self):
+        try:
+            import os
+            os.system("killall afplay")
+        except:
+            pass
+
     def stop(self):
+        self.stop_speaking()
         if self.engine is not None:
             try:
                 self.engine.stop()
