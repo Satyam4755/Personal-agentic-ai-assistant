@@ -92,6 +92,7 @@ class VoiceEngine:
         self.smart_speak(text)
 
     def smart_speak(self, text):
+        import os
         MAX_ELEVEN_CHARS = 150
         text = normalize_for_voice(text)
 
@@ -118,9 +119,15 @@ class VoiceEngine:
                 response = requests.post(url, json=data, headers=headers)
                 
                 if response.status_code == 200:
-                    with open("temp_audio.mp3", "wb") as f:
+                    output_file = "temp_tts.mp3"
+                    with open(output_file, "wb") as f:
                         f.write(response.content)
-                    subprocess.run(["afplay", "temp_audio.mp3"])
+                    
+                    if not os.path.exists(output_file):
+                        print(f"ERROR: {output_file} not found")
+                        return
+
+                    subprocess.run(["afplay", output_file])
                     return
                 else:
                     print(f"ElevenLabs API Error [{response.status_code}]: Quota exhausted or Unauthorized.")
@@ -128,36 +135,6 @@ class VoiceEngine:
             except Exception as e:
                 print("ElevenLabs Exception:", e)
                 self.ELEVEN_ENABLED = False
-
-        print("Falling back to Google TTS (gTTS)...")
-        try:
-            import subprocess
-            from gtts import gTTS
-            tts = gTTS(text=text, lang='hi' if any('\u0900' <= c <= '\u097F' for c in text) else 'en')
-            filename = "temp_fallback.mp3"
-            tts.save(filename)
-            subprocess.run(["afplay", filename])
-            return
-        except Exception as e:
-            print("gTTS failed:", e)
-
-        print("Falling back to system absolute TTS...")
-        self.fallback_tts(text)
-
-    def fallback_tts(self, text):
-        if getattr(self, "AUDIO_DISABLED", False):
-            return
-
-        try:
-            if self.system_name == "Darwin" and shutil.which("say"):
-                subprocess.run(["say", text], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return
-
-            if self.engine is not None:
-                self.engine.say(text)
-                self.engine.runAndWait()
-        except Exception as e:
-            print("TTS failed:", e)
 
     def stop(self):
         if self.engine is not None:
