@@ -9,6 +9,13 @@ try:
 except ImportError:
     pyttsx3 = None
 
+VOICE_ENABLED = True
+
+def toggle_voice(state: bool):
+    global VOICE_ENABLED
+    VOICE_ENABLED = state
+    print(f"Voice mode set to: {VOICE_ENABLED}")
+
 try:
     import speech_recognition as sr
 except ImportError:
@@ -92,6 +99,11 @@ class VoiceEngine:
         self.smart_speak(text)
 
     def smart_speak(self, text):
+        from assistant.voice_engine import VOICE_ENABLED
+        if not VOICE_ENABLED:
+            print("🔇 Voice disabled (saving credits)")
+            return
+
         import os
         MAX_ELEVEN_CHARS = 150
         text = normalize_for_voice(text)

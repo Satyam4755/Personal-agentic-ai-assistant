@@ -19,6 +19,17 @@ class CommandHandler:
             return "Goodbye Sir!", True
 
         command_lower = command
+
+        if command_lower in ["voice off", "mute"]:
+            from assistant.voice_engine import toggle_voice
+            toggle_voice(False)
+            return "Voice responses disabled.", False
+            
+        if command_lower in ["voice on", "unmute"]:
+            from assistant.voice_engine import toggle_voice
+            toggle_voice(True)
+            return "Voice responses enabled.", False
+
         basic_commands = ["hello", "hi", "hey", "tum kaise ho", "kaise ho"]
         if command_lower in basic_commands:
             return self._handle_basic(command_lower)
