@@ -99,7 +99,7 @@ function setupEventStream() {
 }
 
 // Interactive Feature Logic
-let isVoiceEnabled = true;
+let isVoiceEnabled = false;
 
 function toggleVoiceBtn() {
     isVoiceEnabled = !isVoiceEnabled;

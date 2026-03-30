@@ -9,7 +9,7 @@ try:
 except ImportError:
     pyttsx3 = None
 
-VOICE_ENABLED = True
+VOICE_ENABLED = False
 
 def toggle_voice(state: bool):
     global VOICE_ENABLED
