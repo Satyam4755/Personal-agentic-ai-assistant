@@ -50,6 +50,12 @@ function sendCommand() {
         if (data.response) {
             addAssistantMessage(data.response);
         }
+        if (data.should_exit) {
+            logTerminal("System termination sequence initiated...");
+            setTimeout(() => {
+                window.close();
+            }, 2000);
+        }
     })
     .catch(err => {
         console.error(err);

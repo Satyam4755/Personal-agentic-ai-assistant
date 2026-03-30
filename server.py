@@ -53,7 +53,7 @@ def handle_command():
     if not command_handler:
         return {"response": "Backend not ready"}
 
-    response, _ = command_handler.handle_command(command)
+    response, should_exit = command_handler.handle_command(command)
 
     if hasattr(command_handler, "voice_engine") and command_handler.voice_engine:
         try:
@@ -62,8 +62,17 @@ def handle_command():
             command_handler.voice_engine._suppress_ui_chat = False
         except:
             pass
+            
+    if should_exit:
+        def shutdown():
+            import time
+            import os
+            time.sleep(2)
+            os._exit(0)
+        import threading
+        threading.Thread(target=shutdown, daemon=True).start()
 
-    return {"response": response}
+    return {"response": response, "should_exit": should_exit}
 
 @app.route('/toggle_voice', methods=['POST'])
 def toggle_voice_api():
