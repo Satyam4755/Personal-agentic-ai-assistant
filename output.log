@@ -1,0 +1,29 @@
+Startup check:
+- Gemini SDK: ready.
+- Gemini API key: set.
+- Gemini model: gemini-2.5-flash-lite.
+ * Serving Flask app 'server'
+ * Debug mode: off
+smart_speak triggered
+Voice disabled - skipping
+Assistant loop started. Press Ctrl+C to stop.
+- Voice input is ready.
+VOICE SYSTEM READY
+Assistant: Assistant is ready. Say a command.
+smart_speak triggered
+Voice disabled - skipping
+/Users/smritisoni/Desktop/Personal-agentic-ai-assistant/.venv/lib/python3.11/site-packages/transformers/utils/generic.py:441: UserWarning: torch.utils._pytree._register_pytree_node is deprecated. Please use torch.utils._pytree.register_pytree_node instead.
+  _torch_pytree._register_pytree_node(
+Loading faster-whisper model (small)...
+Voice mode set to: True
+VOICE_ENABLED: True
+Response text: Hello sir, kaise hai aap
+Calling smart_speak...
+Assistant: Hello sir, kaise hai aap
+smart_speak triggered
+Sending to ElevenLabs: Hello sir, कैसे हैं आप
+Listening...
+Gemini selected model: gemini-2.5-flash-lite
+Trying Gemini: gemini-2.5-flash-lite
+Gemini success: gemini-2.5-flash-lite
+Trying Gemini: gemini-2.5-flash-lite

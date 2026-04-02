@@ -28,6 +28,31 @@ function addAssistantMessage(text) {
     addMessage('assistant', text);
 }
 
+function addScanImage(imageUrl) {
+    if (!imageUrl) return;
+
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', 'assistant', 'image-message');
+
+    const img = document.createElement('img');
+    img.src = `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    img.alt = 'Captured scan';
+    img.classList.add('scan-preview');
+
+    msgDiv.appendChild(img);
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function renderScanResult(response, image) {
+    if (response) {
+        addAssistantMessage(response);
+    }
+    if (image) {
+        addScanImage(image);
+    }
+}
+
 function sendCommand() {
     const inputEl = document.getElementById("commandInput");
     const command = inputEl.value.trim();
@@ -49,6 +74,9 @@ function sendCommand() {
     .then(data => {
         if (data.response) {
             addAssistantMessage(data.response);
+        }
+        if (data.image) {
+            addScanImage(data.image);
         }
         if (data.should_exit) {
             logTerminal("System termination sequence initiated...");
@@ -104,6 +132,18 @@ function setupEventStream() {
     logTerminal('Connected to Assistant Core API.');
 }
 
+function pollScanResult() {
+    fetch('/scan_result')
+        .then(res => res.json())
+        .then(data => {
+            if (!data.response && !data.image) {
+                return;
+            }
+            renderScanResult(data.response, data.image);
+        })
+        .catch(() => {});
+}
+
 // Interactive Feature Logic
 let isVoiceEnabled = false;
 
@@ -154,3 +194,4 @@ document.querySelectorAll('.ui-controls button').forEach(button => {
 
 // Initialize
 setupEventStream();
+setInterval(pollScanResult, 1000);

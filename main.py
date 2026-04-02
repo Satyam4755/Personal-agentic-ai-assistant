@@ -1,9 +1,12 @@
+import os
 import sys
+import multiprocessing
+import signal
 import threading
-import queue
-import time
 from server import app as flask_app, emit_event
 import server
+
+multiprocessing.set_start_method("spawn", force=True)
 
 class SSEStdoutRedirector:
     def __init__(self, original_stdout):
@@ -24,6 +27,7 @@ class SSEStdoutRedirector:
 from assistant.agent_manager import AgentManager
 from assistant.command_handler import CommandHandler
 from assistant.gemini_brain import get_startup_status
+from assistant.runtime_state import is_running, set_running
 from assistant.voice_engine import VoiceEngine
 
 try:
@@ -37,8 +41,34 @@ def _load_environment():
         load_dotenv()
 
 
+def request_ctrl_c_shutdown():
+    set_running(False)
+    os.kill(os.getpid(), signal.SIGINT)
+
+
+def cleanup(voice_engine=None):
+    try:
+        from assistant.vision_engine import stop_scan
+        stop_scan()
+    except Exception:
+        pass
+
+    if voice_engine is not None:
+        try:
+            voice_engine.stop()
+        except Exception:
+            pass
+
+    try:
+        import cv2
+        cv2.destroyAllWindows()
+    except Exception:
+        pass
+
+
 def main():
     _load_environment()
+    voice_engine = None
 
     # Flask UI integration
     sys.stdout = SSEStdoutRedirector(sys.stdout)
@@ -96,37 +126,51 @@ def main():
         print("- Voice input is unavailable. Falling back to typed commands.")
 
     voice_engine.speak("Assistant is ready. Say a command.")
+    is_busy = False
 
     try:
-        while True:
+        while is_running():
             try:
                 command = voice_engine.listen()
                 if not command:
                     continue
 
-                if any(word in command for word in ["bye", "exit", "quit", "goodbye"]):
-                    voice_engine.speak("Goodbye Sir!")
-                    break
+                command_lower = command.lower().strip()
 
-                agent_manager.remember_context(command)
-                response, should_exit = command_handler.handle_command(command)
-                
-                if response:
-                    voice_engine.speak(response)
+                if "stop scanning" in command_lower:
+                    response, should_exit = command_handler.handle_command(command)
+                    if response:
+                        voice_engine.speak(response)
+                    if should_exit:
+                        request_ctrl_c_shutdown()
+                    continue
 
-                if should_exit:
-                    break
+                if is_busy:
+                    continue
+
+                is_busy = True
+                try:
+                    agent_manager.remember_context(command)
+                    response, should_exit = command_handler.handle_command(command)
+
+                    if response:
+                        voice_engine.speak(response)
+
+                    if should_exit:
+                        request_ctrl_c_shutdown()
+                finally:
+                    is_busy = False
 
             except Exception as e:
                 print("Loop exception:", e)
 
     except KeyboardInterrupt:
+        set_running(False)
         print("\nStopping assistant.")
     finally:
         print("Assistant stopped.")
-        voice_engine.stop()
-        import os
-        os._exit(0)
+        cleanup(voice_engine)
+        sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -12,3 +12,7 @@ faster-whisper
 requests
 
 elevenlabs
+opencv-python
+pillow
+transformers
+torch

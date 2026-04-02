@@ -13,6 +13,43 @@ MODEL_PRIORITY = [
 ]
 DEFAULT_MODEL_NAME = MODEL_PRIORITY[0]
 _client = None
+SYSTEM_PROMPT = """
+You are a personal AI assistant.
+
+STRICT LANGUAGE RULES:
+- Respond ONLY in:
+  1. Hindi (Devanagari script)
+  2. English
+  3. Hinglish (Hindi in English letters)
+
+- NEVER use Urdu script
+- NEVER switch language randomly
+- Match the user's language
+
+Examples:
+User: kya haal hai
+Assistant: Main theek hoon, aap kaise ho?
+
+User: how are you
+Assistant: I am good, how can I help you?
+"""
+URDU_SCRIPT_RE = re.compile(r"[\u0600-\u06FF]")
+
+
+def _compose_prompt(prompt: str) -> str:
+    return f"{SYSTEM_PROMPT.strip()}\n\n{prompt.strip()}"
+
+
+def _enforce_language_rules(text: str, user_text: str = "") -> str:
+    if not text or not URDU_SCRIPT_RE.search(text):
+        return text
+
+    detected_language = _detect_language(user_text)
+    if detected_language == "hindi":
+        return "माफ कीजिए, मैं केवल हिंदी, हिंग्लिश या English में जवाब दूंगा।"
+    if detected_language == "hinglish":
+        return "Maaf kijiye, main sirf Hindi, Hinglish, ya English mein jawab dunga."
+    return "Sorry, I will respond only in Hindi, Hinglish, or English."
 
 def call_groq(prompt):
     try:
@@ -21,7 +58,10 @@ def call_groq(prompt):
 
         res = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT.strip()},
+                {"role": "user", "content": prompt},
+            ]
         )
         return res.choices[0].message.content.strip()
     except Exception as e:
@@ -35,7 +75,10 @@ def call_openai(prompt):
 
         res = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT.strip()},
+                {"role": "user", "content": prompt},
+            ]
         )
         return res.choices[0].message.content.strip()
     except Exception as e:
@@ -43,11 +86,13 @@ def call_openai(prompt):
         return None
 
 def run_with_fallback(client, prompt):
+    full_prompt = _compose_prompt(prompt)
+
     # 1. GEMINI
     for model_name in MODEL_PRIORITY:
         try:
             print(f"Trying Gemini: {model_name}")
-            response = client.models.generate_content(model=model_name, contents=prompt)
+            response = client.models.generate_content(model=model_name, contents=full_prompt)
 
             if response and hasattr(response, "text") and response.text:
                 print(f"Gemini success: {model_name}")
@@ -70,7 +115,7 @@ def run_with_fallback(client, prompt):
         print("OpenAI success")
         return result
 
-    return None
+    return "Network issue, please check connection"
 
 
 def get_startup_status():
@@ -205,7 +250,7 @@ Assistant:"""
 
     response_text = run_with_fallback(client, prompt)
     if response_text:
-        return response_text
+        return _enforce_language_rules(response_text, cleaned_command)
 
     return ERROR_MESSAGE
 
@@ -260,7 +305,7 @@ Corrected command:"""
         print("Speech cleanup → Using Gemini only")
         response = client.models.generate_content(
             model="gemini-2.5-flash-lite",
-            contents=cleanup_prompt
+            contents=_compose_prompt(cleanup_prompt)
         )
         if response and hasattr(response, "text") and response.text:
             refined_text = response.text.strip().splitlines()[0].strip().strip('"').strip("'")
@@ -367,7 +412,7 @@ Text:
         result = run_with_fallback(client, prompt)
 
         if result:
-            return result.strip()
+            return _enforce_language_rules(result.strip(), text)
     except Exception as e:
         print("Hinglish conversion error:", e)
 

@@ -15,6 +15,7 @@ def toggle_voice(state: bool):
     global VOICE_ENABLED
     VOICE_ENABLED = state
     print(f"Voice mode set to: {VOICE_ENABLED}")
+    print("VOICE_ENABLED:", VOICE_ENABLED)
 
 try:
     import speech_recognition as sr
@@ -99,24 +100,19 @@ class VoiceEngine:
         self.smart_speak(text)
 
     def smart_speak(self, text):
+        print("smart_speak triggered")
         from assistant.voice_engine import VOICE_ENABLED
         if not VOICE_ENABLED:
-            print("🔇 Voice disabled (saving credits)")
+            print("Voice disabled - skipping")
             return
 
         import os
-        MAX_ELEVEN_CHARS = 150
+        MAX_ELEVEN_CHARS = 1000
         text = normalize_for_voice(text)
-
-        try:
-            intent_data = detect_intent(text)
-            language = intent_data.get("language", "english")
-            if language == "hinglish":
-                text = convert_to_hindi(text)
-        except Exception as e:
-            pass
+        print("Sending to ElevenLabs:", text)
 
         api_key = os.getenv("ELEVENLABS_API_KEY") or os.getenv("ELEVEN_API_KEY")
+        print("API KEY:", "FOUND" if api_key else "MISSING")
         eleven_enabled = getattr(self, "ELEVEN_ENABLED", True)
 
         if api_key and eleven_enabled and len(text) <= MAX_ELEVEN_CHARS:
@@ -124,35 +120,48 @@ class VoiceEngine:
                 import requests
                 import subprocess
 
-                print("Using ElevenLabs REST API...")
+                print("Calling ElevenLabs API...")
                 url = "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL"
                 headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
                 data = {"text": text, "model_id": "eleven_multilingual_v2"}
                 response = requests.post(url, json=data, headers=headers)
                 
                 if response.status_code == 200:
-                    output_file = "temp_tts.mp3"
+                    output_file = "bihari.mp3"
                     with open(output_file, "wb") as f:
                         f.write(response.content)
                     
                     if not os.path.exists(output_file):
-                        print(f"ERROR: {output_file} not found")
+                        print(f"Voice failed: {output_file} not found")
                         return
 
+                    print("Voice success")
                     subprocess.run(["afplay", output_file])
                     return
                 else:
-                    print(f"ElevenLabs API Error [{response.status_code}]: Quota exhausted or Unauthorized.")
-                    self.ELEVEN_ENABLED = False
+                    print(f"Voice failed: ElevenLabs API Error [{response.status_code}]: Quota exhausted or Unauthorized.")
             except Exception as e:
+                print("Voice failed: Network issue - cannot reach ElevenLabs")
                 print("ElevenLabs Exception:", e)
-                self.ELEVEN_ENABLED = False
+
+        try:
+            print("Trying pyttsx3 fallback...")
+            if pyttsx3 is not None:
+                engine = pyttsx3.init()
+                engine.say(text)
+                engine.runAndWait()
+        except:
+            pass
 
     def stop_speaking(self):
         try:
-            import os
-            os.system("killall afplay")
-        except:
+            subprocess.run(
+                ["killall", "afplay"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except Exception:
             pass
 
     def stop(self):

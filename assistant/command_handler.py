@@ -4,6 +4,13 @@ from datetime import datetime
 from assistant.agent_manager import AgentManager
 from assistant.code_executor import CodeExecutor, run_last_generated_code
 from assistant.gemini_brain import detect_intent, generate_assistant_response
+from assistant.runtime_state import (
+    LISTENING,
+    SCANNING,
+    get_current_state,
+    set_current_state,
+    set_running,
+)
 from assistant.system_control import SystemControl
 
 
@@ -16,9 +23,61 @@ class CommandHandler:
     def handle_command(self, command):
         command = command.lower().strip()
         if any(word in command for word in ["bye", "exit", "quit", "goodbye"]):
+            try:
+                from assistant.vision_engine import stop_scan
+                stop_scan()
+            except Exception:
+                pass
+            try:
+                import cv2
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
+            set_running(False)
             return "Goodbye Sir!", True
 
         command_lower = command
+
+        if "stop scanning" in command_lower:
+            from assistant.vision_engine import stop_scan
+
+            if get_current_state() != SCANNING:
+                return "Scanner is not running.", False
+
+            set_current_state(LISTENING)
+            stop_scan()
+            return "Stopping scan", False
+
+        if "scan it" in command_lower:
+            from assistant.vision_engine import start_live_scan
+
+            if get_current_state() == SCANNING:
+                return "Live scan is already running.", False
+
+            set_current_state(SCANNING)
+
+            def handle_scan_update(response, image_path):
+                try:
+                    print("Live scan:", response)
+                    import server
+                    server.set_latest_scan(response, image_path)
+                except Exception as error:
+                    print(f"Failed to store scan result: {error}")
+
+            def handle_scan_finished():
+                set_current_state(LISTENING)
+
+            try:
+                start_live_scan(handle_scan_update, finished_callback=handle_scan_finished)
+            except Exception as error:
+                set_current_state(LISTENING)
+                print(f"Failed to start scan: {error}")
+                return "Failed to start scan", False
+
+            return "Starting live scan...", False
+
+        if get_current_state() == SCANNING:
+            return "Live scan is running. Say stop scanning when you want to return.", False
 
         if command_lower in ["voice off", "mute"]:
             from assistant.voice_engine import toggle_voice
