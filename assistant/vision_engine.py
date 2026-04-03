@@ -130,6 +130,9 @@ def live_scan_process(result_queue, stop_event):
 
 
 def stop_scan():
+    global scanning_active
+    scanning_active = False
+
     process, result_queue, stop_event = _take_active()
 
     if stop_event is not None:
@@ -140,13 +143,8 @@ def stop_scan():
 
     if process is not None:
         try:
-            process.join(timeout=0.8)
-        except Exception:
-            pass
-        try:
-            if process.is_alive():
-                process.terminate()
-                process.join(timeout=1)
+            process.terminate()
+            process.join(timeout=1)
         except Exception:
             pass
 
@@ -159,8 +157,13 @@ def stop_scan():
         pass
 
 
+scanning_active = False
+
 def start_live_scan(update_callback, finished_callback=None):
     stop_scan()
+
+    global scanning_active
+    scanning_active = True
 
     result_queue = Queue()
     stop_event = Event()
@@ -170,13 +173,19 @@ def start_live_scan(update_callback, finished_callback=None):
     _set_active(process=process, result_queue=result_queue, stop_event=stop_event)
 
     def monitor_results():
+        global scanning_active
         try:
-            while True:
+            while scanning_active:
+                from queue import Empty
                 try:
                     kind, response, image_path = result_queue.get(timeout=0.3)
                 except Empty:
-                    if process.is_alive():
-                        continue
+                    if process and process._popen is not None:
+                        try:
+                            if process.is_alive():
+                                continue
+                        except ValueError:
+                            break
                     break
                 except (EOFError, OSError, ValueError):
                     break
