@@ -1,10 +1,12 @@
 import os
 import threading
-from multiprocessing import Event, Process, Queue
+from multiprocessing import Event, Process, Queue, Value
 from queue import Empty
 
 ANALYZE_EVERY_N_FRAMES = 20
 WINDOW_NAME = "Jarvis Vision"
+
+_has_responded_val = Value("b", False)
 
 _active_lock = threading.Lock()
 _active_process = None
@@ -64,7 +66,7 @@ def _camera_backend(cv2):
     return getattr(cv2, "CAP_AVFOUNDATION", 0)
 
 
-def live_scan_process(result_queue, stop_event):
+def live_scan_process(result_queue, stop_event, has_responded_val):
     cap = None
 
     try:
@@ -102,6 +104,9 @@ def live_scan_process(result_queue, stop_event):
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
+            if has_responded_val.value:
+                continue
+
             frame_count += 1
             if frame_count % ANALYZE_EVERY_N_FRAMES != 0:
                 continue
@@ -116,7 +121,12 @@ def live_scan_process(result_queue, stop_event):
 
             last_label = label
             cv2.imwrite(image_path, frame)
-            result_queue.put(("update", f"I think this is {label}", image_path))
+            
+            response_text = f"I think this is {label}"
+            print("Scan result:", response_text)
+            
+            result_queue.put(("update", response_text, image_path))
+            has_responded_val.value = True
     except Exception as error:
         result_queue.put(("error", str(error), None))
     finally:
@@ -164,10 +174,13 @@ def start_live_scan(update_callback, finished_callback=None):
 
     global scanning_active
     scanning_active = True
+    
+    global _has_responded_val
+    _has_responded_val.value = False
 
     result_queue = Queue()
     stop_event = Event()
-    process = Process(target=live_scan_process, args=(result_queue, stop_event))
+    process = Process(target=live_scan_process, args=(result_queue, stop_event, _has_responded_val))
     process.daemon = True
     process.start()
     _set_active(process=process, result_queue=result_queue, stop_event=stop_event)

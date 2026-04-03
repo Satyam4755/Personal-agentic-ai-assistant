@@ -48,6 +48,13 @@ class CommandHandler:
             stop_scan()
             return "Stopping scan", False
 
+        if "scan again" in command_lower:
+            from assistant.vision_engine import _has_responded_val
+            _has_responded_val.value = False
+            if hasattr(self, "voice_engine") and self.voice_engine:
+                self.voice_engine.speak("Scanning again...")
+            return "Scanning again...", False
+
         if "scan it" in command_lower:
             from assistant.vision_engine import start_live_scan
 
@@ -58,9 +65,11 @@ class CommandHandler:
 
             def handle_scan_update(response, image_path):
                 try:
-                    print("Live scan:", response)
                     import server
                     server.set_latest_scan(response, image_path)
+                    
+                    if hasattr(self, "voice_engine") and self.voice_engine:
+                        self.voice_engine.speak(response)
                 except Exception as error:
                     print(f"Failed to store scan result: {error}")
 
