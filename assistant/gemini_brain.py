@@ -419,6 +419,41 @@ Text:
     return text
 
 
+def extract_memory_profile(user_text: str, assistant_text: str):
+    """
+    Analyzes the latest conversation exchange and extracts any new personal facts,
+    preferences, goals, reminders, or user details into a JSON object.
+    Returns empty dict if nothing new is found.
+    """
+    client, _, model_error = _get_client()
+    if client is None:
+        return {}
+
+    prompt = f"""You are a memory extraction engine for a personal AI assistant.
+Analyze this recent conversation exchange and extract any new permanent facts about the user.
+Examples of things to store: name, favorite things, personal preferences, goals, tasks, reminders, recurring interests, important personal facts.
+DO NOT store conversational filler, temporary states, or things the assistant said unless it's a confirmed fact about the user.
+
+Return ONLY a flat JSON object with snake_case keys. If no new facts are found, return {{}}.
+
+User: {user_text}
+Assistant: {assistant_text}
+
+JSON:"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=_compose_prompt(prompt)
+        )
+        if response and hasattr(response, "text") and response.text:
+            return _extract_json_object(response.text)
+    except Exception as e:
+        print("Memory extraction error:", e)
+    
+    return {}
+
+
 def _get_client():
     global _client
 

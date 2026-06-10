@@ -12,14 +12,12 @@ class AgentManager:
             self.context_history = self.context_history[-50:]
 
     def get_context_prompt(self, new_command):
-        history_items = self.context_history[-5:]
-        if history_items and history_items[-1] == new_command.strip():
-            history_items = history_items[:-1]
-
-        history = "\n".join(f"- {item}" for item in history_items) or "- No previous context"
+        from assistant.memory_engine import get_memory_context
+        memory_context = get_memory_context()
+        
         return (
             "Previous context:\n"
-            f"{history}\n\n"
+            f"{memory_context}\n\n"
             "Current request:\n"
             f"{new_command.strip()}\n\n"
             "Respond accordingly and continue the previous task if relevant."

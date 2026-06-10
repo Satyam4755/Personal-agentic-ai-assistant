@@ -160,6 +160,23 @@ class CommandHandler:
 
         context_prompt = self.agent_manager.get_context_prompt(command)
         gemini_response = generate_assistant_response(command, context_prompt=context_prompt)
+        
+        if gemini_response and "Sorry, I am having trouble" not in gemini_response:
+            from assistant.memory_engine import add_conversation, update_profile
+            from assistant.gemini_brain import extract_memory_profile
+            import threading
+            
+            # Save the actual conversation
+            add_conversation(command, gemini_response)
+            
+            # Run the extraction tool in the background so it doesn't block playback
+            def run_extraction():
+                new_facts = extract_memory_profile(command, gemini_response)
+                if new_facts:
+                    update_profile(new_facts)
+                    
+            threading.Thread(target=run_extraction, daemon=True).start()
+
         return gemini_response or "Sorry, I am having trouble connecting right now.", False
 
     def _handle_basic(self, command):
