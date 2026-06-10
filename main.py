@@ -91,10 +91,7 @@ def main():
     command_handler = CommandHandler(agent_manager=agent_manager)
     command_handler.voice_engine = voice_engine
     
-    def test_elevenlabs():
-        voice_engine.smart_speak("Hello sir, kaise hai aap")
-    
-    test_elevenlabs()
+    # Removed test_elevenlabs() call on startup to save quota and speed up initialization
 
     # Expose them to Flask
     server.command_handler = command_handler
@@ -150,6 +147,8 @@ def main():
 
                 is_busy = True
                 try:
+                    from assistant.runtime_state import set_assistant_state, PROCESSING, IDLE
+                    set_assistant_state(PROCESSING)
                     agent_manager.remember_context(command)
                     response, should_exit = command_handler.handle_command(command)
 
@@ -159,6 +158,8 @@ def main():
                     if should_exit:
                         request_ctrl_c_shutdown()
                 finally:
+                    from assistant.runtime_state import set_assistant_state, IDLE
+                    set_assistant_state(IDLE)
                     is_busy = False
 
             except Exception as e:

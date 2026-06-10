@@ -100,58 +100,63 @@ class VoiceEngine:
         self.smart_speak(text)
 
     def smart_speak(self, text):
-        print("smart_speak triggered")
-        from assistant.voice_engine import VOICE_ENABLED
-        if not VOICE_ENABLED:
-            print("Voice disabled - skipping")
-            return
-
-        import os
-        MAX_ELEVEN_CHARS = 1000
-        text = normalize_for_voice(text)
-        print("Sending to ElevenLabs:", text)
-
-        api_key = os.getenv("ELEVENLABS_API_KEY") or os.getenv("ELEVEN_API_KEY")
-        print("API KEY:", "FOUND" if api_key else "MISSING")
-        eleven_enabled = getattr(self, "ELEVEN_ENABLED", True)
-
-        if api_key and eleven_enabled and len(text) <= MAX_ELEVEN_CHARS:
-            try:
-                import requests
-                import subprocess
-
-                print("Calling ElevenLabs API...")
-                url = "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL"
-                headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
-                data = {"text": text, "model_id": "eleven_multilingual_v2"}
-                response = requests.post(url, json=data, headers=headers)
-                
-                if response.status_code == 200:
-                    output_file = "bihari.mp3"
-                    with open(output_file, "wb") as f:
-                        f.write(response.content)
-                    
-                    if not os.path.exists(output_file):
-                        print(f"Voice failed: {output_file} not found")
-                        return
-
-                    print("Voice success")
-                    subprocess.run(["afplay", output_file])
-                    return
-                else:
-                    print(f"Voice failed: ElevenLabs API Error [{response.status_code}]: Quota exhausted or Unauthorized.")
-            except Exception as e:
-                print("Voice failed: Network issue - cannot reach ElevenLabs")
-                print("ElevenLabs Exception:", e)
-
+        from assistant.runtime_state import get_assistant_state, set_assistant_state, IDLE, SPEAKING
+        set_assistant_state(SPEAKING)
         try:
-            print("Trying pyttsx3 fallback...")
-            if pyttsx3 is not None:
-                engine = pyttsx3.init()
-                engine.say(text)
-                engine.runAndWait()
-        except:
-            pass
+            print("smart_speak triggered")
+            from assistant.voice_engine import VOICE_ENABLED
+            if not VOICE_ENABLED:
+                print("Voice disabled - skipping")
+                return
+
+            import os
+            MAX_ELEVEN_CHARS = 1000
+            text = normalize_for_voice(text)
+            print("Sending to ElevenLabs:", text)
+
+            api_key = os.getenv("ELEVENLABS_API_KEY") or os.getenv("ELEVEN_API_KEY")
+            print("API KEY:", "FOUND" if api_key else "MISSING")
+            eleven_enabled = getattr(self, "ELEVEN_ENABLED", True)
+
+            if api_key and eleven_enabled and len(text) <= MAX_ELEVEN_CHARS:
+                try:
+                    import requests
+                    import subprocess
+
+                    print("Calling ElevenLabs API...")
+                    url = "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL"
+                    headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
+                    data = {"text": text, "model_id": "eleven_multilingual_v2"}
+                    response = requests.post(url, json=data, headers=headers)
+                    
+                    if response.status_code == 200:
+                        output_file = "bihari.mp3"
+                        with open(output_file, "wb") as f:
+                            f.write(response.content)
+                        
+                        if not os.path.exists(output_file):
+                            print(f"Voice failed: {output_file} not found")
+                            return
+
+                        print("Voice success")
+                        subprocess.run(["afplay", output_file])
+                        return
+                    else:
+                        print(f"Voice failed: ElevenLabs API Error [{response.status_code}]: Quota exhausted or Unauthorized.")
+                except Exception as e:
+                    print("Voice failed: Network issue - cannot reach ElevenLabs")
+                    print("ElevenLabs Exception:", e)
+
+            try:
+                print("Trying pyttsx3 fallback...")
+                if pyttsx3 is not None:
+                    engine = pyttsx3.init()
+                    engine.say(text)
+                    engine.runAndWait()
+            except:
+                pass
+        finally:
+            set_assistant_state(IDLE)
 
     def stop_speaking(self):
         try:
@@ -163,6 +168,8 @@ class VoiceEngine:
             )
         except Exception:
             pass
+        from assistant.runtime_state import set_assistant_state, IDLE
+        set_assistant_state(IDLE)
 
     def stop(self):
         self.stop_speaking()
@@ -173,21 +180,30 @@ class VoiceEngine:
                 pass
 
     def listen(self):
-        self.last_listen_error = False
+        from assistant.runtime_state import get_assistant_state, set_assistant_state, IDLE, LISTENING
+        if get_assistant_state() != IDLE:
+            return None
 
-        if self.has_voice_input():
-            command = self._listen_from_microphone()
-            if command:
-                print(f"You: {command}")
-                return command
+        set_assistant_state(LISTENING)
+        try:
+            self.last_listen_error = False
 
-            if not self.voice_disabled:
-                return None
+            if self.has_voice_input():
+                command = self._listen_from_microphone()
+                if command:
+                    print(f"You: {command}")
+                    return command
 
-        typed_command = self._listen_from_terminal()
-        if typed_command:
-            print(f"You: {typed_command}")
-        return typed_command
+                if not self.voice_disabled:
+                    return None
+
+            typed_command = self._listen_from_terminal()
+            if typed_command:
+                print(f"You: {typed_command}")
+            return typed_command
+        finally:
+            if get_assistant_state() == LISTENING:
+                set_assistant_state(IDLE)
 
     def reset_microphone(self):
         if sr is None:
@@ -289,15 +305,16 @@ class VoiceEngine:
             return None
 
         last_error = None
-        for language in self.speech_languages:
-            try:
-                transcript = self.recognizer.recognize_google(audio, language=language)
-                if transcript and transcript.strip():
-                    return transcript.strip()
-            except sr.UnknownValueError:
-                continue
-            except Exception as error:
-                last_error = error
+        # Optimize by only trying the primary language. Trying multiple sequentially causes extreme delays.
+        language = self.speech_languages[0] if self.speech_languages else "en-US"
+        try:
+            transcript = self.recognizer.recognize_google(audio, language=language)
+            if transcript and transcript.strip():
+                return transcript.strip()
+        except sr.UnknownValueError:
+            pass
+        except Exception as error:
+            last_error = error
 
         if last_error:
             print(f"Speech recognition error: {last_error}")

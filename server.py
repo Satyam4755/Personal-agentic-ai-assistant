@@ -82,29 +82,34 @@ def handle_command():
     if not command_handler:
         return {"response": "Backend not ready"}
 
-    response, should_exit = command_handler.handle_command(command)
+    from assistant.runtime_state import set_assistant_state, PROCESSING, IDLE
+    set_assistant_state(PROCESSING)
+    try:
+        response, should_exit = command_handler.handle_command(command)
 
-    if hasattr(command_handler, "voice_engine") and command_handler.voice_engine:
-        try:
-            print("Response text:", response)
-            print("Calling smart_speak...")
-            command_handler.voice_engine._suppress_ui_chat = True
-            command_handler.voice_engine.speak(response)
-            command_handler.voice_engine._suppress_ui_chat = False
-        except Exception as e:
-            print("Error in speak:", e)
-            pass
-            
-    if should_exit:
-        def shutdown():
-            from assistant.runtime_state import set_running
-            import time
-            set_running(False)
-            time.sleep(0.2)
-            os.kill(os.getpid(), signal.SIGINT)
-        threading.Thread(target=shutdown, daemon=True).start()
+        if hasattr(command_handler, "voice_engine") and command_handler.voice_engine:
+            try:
+                print("Response text:", response)
+                print("Calling smart_speak...")
+                command_handler.voice_engine._suppress_ui_chat = True
+                command_handler.voice_engine.speak(response)
+                command_handler.voice_engine._suppress_ui_chat = False
+            except Exception as e:
+                print("Error in speak:", e)
+                pass
+                
+        if should_exit:
+            def shutdown():
+                from assistant.runtime_state import set_running
+                import time
+                set_running(False)
+                time.sleep(0.2)
+                os.kill(os.getpid(), signal.SIGINT)
+            threading.Thread(target=shutdown, daemon=True).start()
 
-    return {"response": response, "should_exit": should_exit}
+        return {"response": response, "should_exit": should_exit}
+    finally:
+        set_assistant_state(IDLE)
 
 @app.route('/scan_result')
 def scan_result():
